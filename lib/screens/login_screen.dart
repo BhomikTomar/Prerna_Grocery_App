@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'signup_screen.dart';
 import 'home_screen.dart';
 
@@ -28,16 +30,63 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = true;
       });
 
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        // Sign in with email and password
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
 
-      setState(() {
-        _isLoading = false;
-      });
+        setState(() {
+          _isLoading = false;
+        });
 
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      } on FirebaseAuthException catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        String errorMessage = 'An error occurred during login';
+
+        switch (e.code) {
+          case 'user-not-found':
+            errorMessage = 'No user found for that email address.';
+            break;
+          case 'wrong-password':
+            errorMessage = 'Wrong password provided.';
+            break;
+          case 'invalid-email':
+            errorMessage = 'Please enter a valid email address.';
+            break;
+          case 'user-disabled':
+            errorMessage = 'This account has been disabled.';
+            break;
+          case 'too-many-requests':
+            errorMessage = 'Too many failed attempts. Please try again later.';
+            break;
+          default:
+            errorMessage = e.message ?? 'An error occurred during login';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+        );
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An unexpected error occurred: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -45,6 +94,151 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => const SignupScreen()));
+  }
+
+  void _handleForgotPassword() async {
+    if (_emailController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email address first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: _emailController.text.trim(),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset email sent! Check your inbox.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = 'Failed to send reset email';
+
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No user found with this email address.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'Please enter a valid email address.';
+          break;
+        default:
+          errorMessage = e.message ?? 'Failed to send reset email';
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An unexpected error occurred: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _handleGoogleSignIn() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Initialize Google Sign In
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+
+      // Trigger the authentication flow
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        // User cancelled the sign-in
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // Create a new credential
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase with the Google credential
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      String errorMessage = 'Google sign-in failed';
+
+      switch (e.code) {
+        case 'account-exists-with-different-credential':
+          errorMessage =
+              'An account already exists with the same email address but different sign-in credentials.';
+          break;
+        case 'invalid-credential':
+          errorMessage = 'Invalid credentials.';
+          break;
+        case 'operation-not-allowed':
+          errorMessage = 'Google sign-in is not enabled.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This account has been disabled.';
+          break;
+        case 'user-not-found':
+          errorMessage = 'No user found with this email address.';
+          break;
+        case 'network-request-failed':
+          errorMessage =
+              'Network error. Please check your internet connection.';
+          break;
+        default:
+          errorMessage = e.message ?? 'Google sign-in failed';
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('An unexpected error occurred: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -160,7 +354,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {},
+                    onPressed: _handleForgotPassword,
                     child: const Text(
                       'Forgot Password?',
                       style: TextStyle(
@@ -222,6 +416,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Google',
                         Icons.g_mobiledata,
                         Colors.red,
+                        onPressed: _isLoading ? null : _handleGoogleSignIn,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -230,6 +425,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Facebook',
                         Icons.facebook,
                         Colors.blue,
+                        onPressed: _isLoading
+                            ? null
+                            : () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Facebook sign-in coming soon!',
+                                    ),
+                                    backgroundColor: Colors.blue,
+                                  ),
+                                );
+                              },
                       ),
                     ),
                   ],
@@ -267,7 +474,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildSocialButton(String text, IconData icon, Color color) {
+  Widget _buildSocialButton(
+    String text,
+    IconData icon,
+    Color color, {
+    VoidCallback? onPressed,
+  }) {
     return Container(
       height: 56,
       decoration: BoxDecoration(
@@ -275,7 +487,7 @@ class _LoginScreenState extends State<LoginScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: TextButton(
-        onPressed: () {},
+        onPressed: onPressed,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

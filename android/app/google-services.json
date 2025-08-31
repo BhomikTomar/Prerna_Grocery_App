@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "67672893974",
+    "project_id": "prerna-app",
+    "storage_bucket": "prerna-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:67672893974:android:002c169c02a0fa0df4e337",
+        "android_client_info": {
+          "package_name": "com.example.prerna"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5N-VVDMS2g7dmBgrRzwNUIRESJgK9VZ8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
