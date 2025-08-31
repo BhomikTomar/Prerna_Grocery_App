@@ -41,48 +41,48 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBp2M7k7TIFo1MNgd12B_s8BnXMpQyjwBc',
-    appId: '1:67672893974:web:f91291de206f4709f4e337',
-    messagingSenderId: '67672893974',
-    projectId: 'prerna-app',
-    authDomain: 'prerna-app.firebaseapp.com',
-    storageBucket: 'prerna-app.firebasestorage.app',
-    measurementId: 'G-GFY8VS2R2S',
+    apiKey: 'YOUR_WEB_API_KEY',
+    appId: 'YOUR_WEB_APP_ID',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+    projectId: 'YOUR_PROJECT_ID',
+    authDomain: 'YOUR_AUTH_DOMAIN',
+    storageBucket: 'YOUR_STORAGE_BUCKET',
+    measurementId: 'YOUR_MEASUREMENT_ID',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyD5N-VVDMS2g7dmBgrRzwNUIRESJgK9VZ8',
-    appId: '1:67672893974:android:002c169c02a0fa0df4e337',
-    messagingSenderId: '67672893974',
-    projectId: 'prerna-app',
-    storageBucket: 'prerna-app.firebasestorage.app',
+    apiKey: 'YOUR_ANDROID_API_KEY',
+    appId: 'YOUR_ANDROID_APP_ID',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+    projectId: 'YOUR_PROJECT_ID',
+    storageBucket: 'YOUR_STORAGE_BUCKET',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyA4jFotKquiRIDa6CgAq0QfjubhqHhOiR4',
-    appId: '1:67672893974:ios:afcf33ed92c221acf4e337',
-    messagingSenderId: '67672893974',
-    projectId: 'prerna-app',
-    storageBucket: 'prerna-app.firebasestorage.app',
-    iosBundleId: 'com.example.prerna',
+    apiKey: 'YOUR_IOS_API_KEY',
+    appId: 'YOUR_IOS_APP_ID',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+    projectId: 'YOUR_PROJECT_ID',
+    storageBucket: 'YOUR_STORAGE_BUCKET',
+    iosBundleId: 'YOUR_IOS_BUNDLE_ID',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyA4jFotKquiRIDa6CgAq0QfjubhqHhOiR4',
-    appId: '1:67672893974:ios:afcf33ed92c221acf4e337',
-    messagingSenderId: '67672893974',
-    projectId: 'prerna-app',
-    storageBucket: 'prerna-app.firebasestorage.app',
-    iosBundleId: 'com.example.prerna',
+    apiKey: 'YOUR_MACOS_API_KEY',
+    appId: 'YOUR_MACOS_APP_ID',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+    projectId: 'YOUR_PROJECT_ID',
+    storageBucket: 'YOUR_STORAGE_BUCKET',
+    iosBundleId: 'YOUR_MACOS_BUNDLE_ID',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBp2M7k7TIFo1MNgd12B_s8BnXMpQyjwBc',
-    appId: '1:67672893974:web:41b3d03e9957a808f4e337',
-    messagingSenderId: '67672893974',
-    projectId: 'prerna-app',
-    authDomain: 'prerna-app.firebaseapp.com',
-    storageBucket: 'prerna-app.firebasestorage.app',
-    measurementId: 'G-92JLG2XKZ8',
+    apiKey: 'YOUR_WINDOWS_API_KEY',
+    appId: 'YOUR_WINDOWS_APP_ID',
+    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
+    projectId: 'YOUR_PROJECT_ID',
+    authDomain: 'YOUR_AUTH_DOMAIN',
+    storageBucket: 'YOUR_STORAGE_BUCKET',
+    measurementId: 'YOUR_WINDOWS_MEASUREMENT_ID',
   );
 }
