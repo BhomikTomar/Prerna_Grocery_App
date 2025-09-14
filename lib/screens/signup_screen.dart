@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import '../services/auth_service.dart';
 import 'home_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -52,160 +51,56 @@ class _SignupScreenState extends State<SignupScreen> {
       _isLoading = true;
     });
 
-    try {
-      // Create user with email and password
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+    final result = await AuthService().register(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      name: _nameController.text.trim(),
+      phone: '', // You can add a phone field later if needed
+      userType: 'consumer', // Default user type
+    );
 
-      // Update user profile with display name
-      await FirebaseAuth.instance.currentUser?.updateDisplayName(
-        _nameController.text.trim(),
-      );
+    setState(() {
+      _isLoading = false;
+    });
 
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-
+    if (result['success']) {
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
         (route) => false,
       );
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      String errorMessage = 'An error occurred during signup';
-
-      switch (e.code) {
-        case 'weak-password':
-          errorMessage = 'The password provided is too weak.';
-          break;
-        case 'email-already-in-use':
-          errorMessage = 'An account already exists for that email.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Please enter a valid email address.';
-          break;
-        case 'operation-not-allowed':
-          errorMessage = 'Email/password accounts are not enabled.';
-          break;
-        default:
-          errorMessage = e.message ?? 'An error occurred during signup';
-      }
-
+    } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-      );
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('An unexpected error occurred: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(result['message']), backgroundColor: Colors.red),
       );
     }
   }
 
   void _handleGoogleSignIn() async {
-    try {
-      setState(() {
-        _isLoading = true;
-      });
+    setState(() {
+      _isLoading = true;
+    });
 
-      // Initialize Google Sign In
-      final GoogleSignIn googleSignIn = GoogleSignIn();
+    // For now, show a message that Google Sign In needs backend implementation
+    final result = await AuthService().googleSignIn(
+      googleToken: 'placeholder_token', // Replace with actual Google token
+    );
 
-      // Trigger the authentication flow
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+    setState(() {
+      _isLoading = false;
+    });
 
-      if (googleUser == null) {
-        // User cancelled the sign-in
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
-
-      // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Create a new credential
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase with the Google credential
-      await FirebaseAuth.instance.signInWithCredential(credential);
-
-      setState(() {
-        _isLoading = false;
-      });
-
+    if (result['success']) {
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
         (route) => false,
       );
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      String errorMessage = 'Google sign-in failed';
-
-      switch (e.code) {
-        case 'account-exists-with-different-credential':
-          errorMessage =
-              'An account already exists with the same email address but different sign-in credentials.';
-          break;
-        case 'invalid-credential':
-          errorMessage = 'Invalid credentials.';
-          break;
-        case 'operation-not-allowed':
-          errorMessage = 'Google sign-in is not enabled.';
-          break;
-        case 'user-disabled':
-          errorMessage = 'This account has been disabled.';
-          break;
-        case 'user-not-found':
-          errorMessage = 'No user found with this email address.';
-          break;
-        case 'network-request-failed':
-          errorMessage =
-              'Network error. Please check your internet connection.';
-          break;
-        default:
-          errorMessage = e.message ?? 'Google sign-in failed';
-      }
-
+    } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-      );
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('An unexpected error occurred: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(result['message']), backgroundColor: Colors.red),
       );
     }
   }

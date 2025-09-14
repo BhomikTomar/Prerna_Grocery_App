@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../services/auth_service.dart';
 import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -419,8 +419,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showUserMenu() {
-    final user = FirebaseAuth.instance.currentUser;
+  void _showUserMenu() async {
+    final user = await AuthService().getCurrentUser();
     showModalBottomSheet(
       context: context,
       builder: (context) => Container(
@@ -430,8 +430,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.person),
-              title: Text(user?.displayName ?? 'User'),
-              subtitle: Text(user?.email ?? ''),
+              title: Text(user?['name'] ?? user?['displayName'] ?? 'User'),
+              subtitle: Text(user?['email'] ?? ''),
             ),
             const Divider(),
             ListTile(
@@ -447,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handleLogout() async {
     try {
-      await FirebaseAuth.instance.signOut();
+      await AuthService().logout();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
