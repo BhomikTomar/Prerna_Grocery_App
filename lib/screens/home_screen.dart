@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/category_service.dart';
+import '../widgets/categories_section.dart';
 import 'login_screen.dart';
+import 'search_results_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,6 +19,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _carouselTimer;
 
   final Map<_ProductItem, int> _cart = {};
+
+  // Categories state
+  final CategoryService _categoryService = CategoryService();
+  List<dynamic> _categories = [];
+  bool _isLoadingCategories = true;
+
+  // Search state
+  final TextEditingController _searchController = TextEditingController();
+  bool _hasSearchText = false;
 
   final List<_BannerItem> _banners = const [
     _BannerItem(
@@ -96,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _carouselTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (!mounted) return;
+      if (!mounted || !_carouselController.hasClients) return;
       final next = (_currentCarouselIndex + 1) % _banners.length;
       _carouselController.animateToPage(
         next,
@@ -104,12 +116,48 @@ class _HomeScreenState extends State<HomeScreen> {
         curve: Curves.easeInOut,
       );
     });
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final result = await _categoryService.getCategories();
+      if (result['success'] && mounted) {
+        setState(() {
+          _categories = result['categories'] ?? [];
+          _isLoadingCategories = false;
+        });
+      } else if (mounted) {
+        setState(() {
+          _isLoadingCategories = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingCategories = false;
+        });
+      }
+    }
+  }
+
+  void _performSearch() {
+    final query = _searchController.text.trim();
+    if (query.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SearchResultsScreen(searchQuery: query),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
     _carouselTimer?.cancel();
     _carouselController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -199,6 +247,13 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _buildCarousel(),
           const SizedBox(height: 24),
+          _buildSearchBar(),
+          const SizedBox(height: 24),
+          CategoriesSection(
+            categories: _categories,
+            isLoading: _isLoadingCategories,
+          ),
+          const SizedBox(height: 24),
           _buildCategoryHeader('Chocolates'),
           const SizedBox(height: 12),
           _buildHorizontalProducts(_chocolates),
@@ -219,9 +274,13 @@ class _HomeScreenState extends State<HomeScreen> {
           child: PageView.builder(
             controller: _carouselController,
             itemCount: _banners.length,
-            onPageChanged: (index) => setState(() {
-              _currentCarouselIndex = index;
-            }),
+            onPageChanged: (index) {
+              if (mounted) {
+                setState(() {
+                  _currentCarouselIndex = index;
+                });
+              }
+            },
             itemBuilder: (context, index) {
               final banner = _banners[index];
               return Container(
@@ -281,6 +340,61 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search for products...',
+          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 16),
+          prefixIcon: const Icon(Icons.search, color: Color(0xFF2E7D32)),
+          suffixIcon: _hasSearchText
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: Colors.grey),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _hasSearchText = false;
+                    });
+                  },
+                )
+              : null,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _hasSearchText = value.isNotEmpty;
+          });
+        },
+        onSubmitted: (value) {
+          _performSearch();
+        },
+      ),
     );
   }
 

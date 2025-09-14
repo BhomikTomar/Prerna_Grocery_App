@@ -6,6 +6,8 @@ require('dotenv').config();
 
 const connectDB = require('./config/database');
 const authRoutes = require('./routes/auth');
+const categoryRoutes = require('./routes/categories');
+const productRoutes = require('./routes/products');
 
 // Connect to database
 connectDB();
@@ -32,7 +34,9 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:57493',
     'http://10.0.2.2:3000',
-    'http://10.0.2.2:57493'
+    'http://10.0.2.2:57493',
+    'http://192.168.1.XXX:3000', // Replace XXX with your IP
+    'http://192.168.1.XXX:57493' // Replace XXX with your IP
   ],
   credentials: true
 }));
@@ -43,6 +47,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/users', authRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/products', productRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -83,4 +89,11 @@ app.listen(PORT, () => {
   console.log(`   POST http://localhost:${PORT}/api/users/login`);
   console.log(`   GET  http://localhost:${PORT}/api/users/me`);
   console.log(`   PUT  http://localhost:${PORT}/api/users/profile`);
+  console.log(`📂 Category Endpoints:`);
+  console.log(`   GET  http://localhost:${PORT}/api/categories`);
+  console.log(`   GET  http://localhost:${PORT}/api/categories/:id`);
+  console.log(`🛍️  Product Endpoints:`);
+  console.log(`   GET  http://localhost:${PORT}/api/products`);
+  console.log(`   GET  http://localhost:${PORT}/api/products/category/:categoryId`);
+  console.log(`   GET  http://localhost:${PORT}/api/products/:id`);
 });
