@@ -1,6 +1,7 @@
 const express = require('express');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -9,13 +10,16 @@ const router = express.Router();
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    const { category, status, search, limit = 20, page = 1 } = req.query;
+    const { category, status, search, sellerId, limit = 20, page = 1 } = req.query;
     
     // Build filter object
     const filter = {};
     if (category) filter.category = category;
     if (status) filter.status = status;
     else filter.status = 'active'; // Default to active products only
+
+    // Filter by seller if provided
+    if (sellerId) filter.sellerId = sellerId;
 
     // Add search functionality
     if (search) {
@@ -145,6 +149,76 @@ router.get('/:id', async (req, res) => {
       success: false,
       message: 'Server error while fetching product'
     });
+  }
+});
+
+// @route   POST /api/products
+// @desc    Create a product (seller only)
+// @access  Private
+router.post('/', protect, async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !['seller', 'vendor', 'admin'].includes(user.userType)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const {
+      name,
+      description,
+      category,
+      price = {},
+      inventory = {},
+      images,
+      tags,
+      status
+    } = req.body;
+
+    // Accept both app and website payloads
+    const amountFromApp = typeof price.amount === 'number' ? price.amount : undefined;
+    const mrpFromWeb = typeof price.mrp === 'number' ? price.mrp : undefined;
+    const sellingFromWeb = typeof price.selling === 'number' ? price.selling : undefined;
+    const amountForApp = amountFromApp ?? sellingFromWeb ?? mrpFromWeb;
+    const currencyForApp = price.currency || 'INR';
+
+    if (!name || !description || !category || typeof amountForApp !== 'number' || !inventory?.quantity || !images || images.length === 0) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    const product = await Product.create({
+      sellerId: user._id,
+      name,
+      description,
+      category,
+      // Persist in website-native shape
+      price: {
+        mrp: mrpFromWeb ?? amountForApp,
+        selling: sellingFromWeb ?? amountForApp
+      },
+      inventory: {
+        quantity: inventory.quantity,
+        unit: inventory.unit || 'piece'
+      },
+      images,
+      tags: tags || [],
+      status: status || 'active'
+    });
+
+    // For app clients expecting amount/currency/lowStockThreshold, enrich response on the fly
+    const responseData = product.toObject();
+    responseData.price = {
+      ...responseData.price,
+      amount: amountForApp,
+      currency: currencyForApp
+    };
+    responseData.inventory = {
+      ...responseData.inventory,
+      lowStockThreshold: inventory.lowStockThreshold ?? 10
+    };
+
+    res.status(201).json({ success: true, data: responseData });
+  } catch (error) {
+    console.error('Error creating product:', error);
+    res.status(500).json({ success: false, message: 'Server error while creating product' });
   }
 });
 

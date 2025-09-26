@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/product_service.dart';
+import 'product_detail_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   final String categoryId;
@@ -172,7 +173,20 @@ class _ProductsScreenState extends State<ProductsScreen> {
             itemCount: _products.length,
             itemBuilder: (context, index) {
               final product = _products[index];
-              return _buildProductCard(product);
+              return GestureDetector(
+                onTap: () {
+                  final id = product['_id']?.toString();
+                  if (id != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProductDetailScreen(productId: id),
+                      ),
+                    );
+                  }
+                },
+                child: _buildProductCard(product),
+              );
             },
           ),
         ),

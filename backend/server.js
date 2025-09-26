@@ -8,6 +8,7 @@ const connectDB = require('./config/database');
 const authRoutes = require('./routes/auth');
 const categoryRoutes = require('./routes/categories');
 const productRoutes = require('./routes/products');
+const orderRoutes = require('./routes/orders');
 
 // Connect to database
 connectDB();
@@ -49,6 +50,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/users', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -96,4 +98,6 @@ app.listen(PORT, () => {
   console.log(`   GET  http://localhost:${PORT}/api/products`);
   console.log(`   GET  http://localhost:${PORT}/api/products/category/:categoryId`);
   console.log(`   GET  http://localhost:${PORT}/api/products/:id`);
+  console.log(`📦 Order Endpoints:`);
+  console.log(`   GET  http://localhost:${PORT}/api/orders`);
 });

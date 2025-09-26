@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema({
   },
   userType: {
     type: String,
-    enum: ['consumer', 'admin', 'vendor'],
+    enum: ['consumer', 'admin', 'vendor', 'seller'],
     default: 'consumer'
   },
   isEmailVerified: {

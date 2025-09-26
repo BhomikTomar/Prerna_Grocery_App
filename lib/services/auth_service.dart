@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:crypto/crypto.dart';
 
 class AuthService {
   static const String _baseUrl = 'http://localhost:5000/api';
@@ -42,6 +40,39 @@ class AuthService {
     return null;
   }
 
+  // Fetch current user from backend using token and cache it
+  Future<Map<String, dynamic>?> fetchAndCacheCurrentUser() async {
+    final token = await getToken();
+    if (token == null || token.isEmpty) return null;
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final user = data['user'];
+        if (user != null) {
+          await saveUser(user);
+          return Map<String, dynamic>.from(user);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // Ensure we have a current user (local or fetched)
+  Future<Map<String, dynamic>?> getOrFetchCurrentUser() async {
+    final local = await getCurrentUser();
+    if (local != null && (local['userType'] != null || local['role'] != null)) {
+      return local;
+    }
+    return await fetchAndCacheCurrentUser();
+  }
+
   // Check if user is logged in
   Future<bool> isLoggedIn() async {
     final token = await getToken();
@@ -55,12 +86,7 @@ class AuthService {
     await prefs.remove(_userKey);
   }
 
-  // Hash password
-  String _hashPassword(String password) {
-    final bytes = utf8.encode(password);
-    final digest = sha256.convert(bytes);
-    return digest.toString();
-  }
+  // (Removed unused password hashing; backend handles hashing)
 
   // Store JWT token from backend response
   Future<void> _storeTokenFromResponse(Map<String, dynamic> response) async {

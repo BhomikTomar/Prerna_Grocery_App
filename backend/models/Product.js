@@ -24,16 +24,9 @@ const productSchema = new mongoose.Schema({
     required: [true, 'Category is required']
   },
   price: {
-    amount: {
-      type: Number,
-      required: [true, 'Price amount is required'],
-      min: [0, 'Price cannot be negative']
-    },
-    currency: {
-      type: String,
-      default: 'USD',
-      enum: ['USD', 'EUR', 'GBP', 'INR']
-    }
+    // Website-native shape
+    mrp: { type: Number, required: true },
+    selling: { type: Number, required: true }
   },
   inventory: {
     quantity: {
@@ -41,10 +34,7 @@ const productSchema = new mongoose.Schema({
       required: [true, 'Inventory quantity is required'],
       min: [0, 'Quantity cannot be negative']
     },
-    lowStockThreshold: {
-      type: Number,
-      default: 10
-    }
+    unit: { type: String, required: true, default: 'piece' }
   },
   images: [{
     type: String,
@@ -69,7 +59,7 @@ const productSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'inactive', 'out_of_stock', 'discontinued'],
+    enum: ['active', 'inactive', 'out_of_stock'],
     default: 'active'
   }
 }, {
