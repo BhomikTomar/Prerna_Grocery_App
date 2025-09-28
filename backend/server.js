@@ -8,6 +8,7 @@ const connectDB = require('./config/database');
 const authRoutes = require('./routes/auth');
 const categoryRoutes = require('./routes/categories');
 const productRoutes = require('./routes/products');
+const cartRoutes = require('./routes/cart');
 const orderRoutes = require('./routes/orders');
 
 // Connect to database
@@ -50,6 +51,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/users', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 
 // Health check endpoint

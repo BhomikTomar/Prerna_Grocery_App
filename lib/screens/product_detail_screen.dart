@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/product_service.dart';
+import '../services/cart_service.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String productId;
@@ -11,6 +12,7 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final ProductService _productService = ProductService();
+  final CartService _cartService = CartService();
   bool _isLoading = true;
   Map<String, dynamic>? _product;
   String? _error;
@@ -205,14 +207,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  void _handleAddToCart() {
-    final name = _product?['name']?.toString() ?? 'Product';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Added $_quantity × $name to cart'),
-        duration: const Duration(seconds: 2),
-      ),
+  Future<void> _handleAddToCart() async {
+    final productId =
+        _product?['_id']?.toString() ?? _product?['id']?.toString();
+    if (productId == null) return;
+
+    final res = await _cartService.addToCart(
+      productId: productId,
+      quantity: _quantity,
     );
+    if (!mounted) return;
+    if (res['success'] == true) {
+      final name = _product?['name']?.toString() ?? 'Product';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Added $_quantity × $name to cart'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      final msg = res['message']?.toString() ?? 'Failed to add to cart';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 }
 

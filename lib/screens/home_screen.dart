@@ -4,11 +4,14 @@ import '../services/auth_service.dart';
 import '../services/category_service.dart';
 import '../services/product_service.dart';
 import '../services/order_service.dart';
+import '../services/cart_service.dart';
 import '../widgets/categories_section.dart';
 import 'login_screen.dart';
 import 'search_results_screen.dart';
 import 'products_screen.dart';
 import 'product_detail_screen.dart';
+import 'checkout_screen.dart';
+import 'order_history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,6 +26,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _carouselTimer;
 
   final Map<_ProductItem, int> _cart = {};
+  final CartService _cartService = CartService();
+  int _serverCartCount = 0;
 
   // Categories state
   final CategoryService _categoryService = CategoryService();
@@ -77,6 +82,25 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _loadCategories();
     _loadCurrentUser();
+    _refreshCartCount();
+  }
+
+  Future<void> _refreshCartCount() async {
+    try {
+      final res = await _cartService.getCart();
+      if (!mounted) return;
+      if (res['success'] == true) {
+        final items = (res['cart']?['items'] as List<dynamic>?) ?? [];
+        int count = 0;
+        for (final it in items) {
+          final q = (it is Map && it['quantity'] is int)
+              ? it['quantity'] as int
+              : 0;
+          count += q;
+        }
+        setState(() => _serverCartCount = count);
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadCategories() async {
@@ -224,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.shopping_bag_outlined),
                   onPressed: _openCart,
                 ),
-                if (_cartCount > 0)
+                if (_serverCartCount > 0)
                   Positioned(
                     right: 2,
                     top: 2,
@@ -238,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        _cartCount.toString(),
+                        _serverCartCount.toString(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -634,17 +658,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return '0.00';
   }
 
-  void _openCart() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _CartScreen(
-          items: _cart,
-          onIncrement: _incrementItem,
-          onDecrement: _decrementItem,
-          total: _cartTotal,
-        ),
-      ),
-    );
+  void _openCart() async {
+    // Fetch latest cart from backend so newly added items are visible
+    final res = await _cartService.getCart();
+    if (!mounted) return;
+    if (res['success'] == true) {
+      final cart = res['cart'] as Map<String, dynamic>?;
+      final items = (cart?['items'] as List<dynamic>?) ?? [];
+      setState(() {
+        _serverCartCount = items.fold<int>(
+          0,
+          (sum, e) => sum + ((e['quantity'] ?? 0) as int),
+        );
+      });
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => _RemoteCartScreen(items: items)),
+      );
+      // Refresh count on return to reflect any changes made in cart
+      await _refreshCartCount();
+    } else {
+      final msg = res['message']?.toString() ?? 'Failed to load cart';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   void _openSellerAnalytics() {
@@ -673,6 +708,19 @@ class _HomeScreenState extends State<HomeScreen> {
               subtitle: Text(user?['email'] ?? ''),
             ),
             const Divider(),
+            ListTile(
+              leading: const Icon(Icons.shopping_bag_outlined),
+              title: const Text('Order History'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const OrderHistoryScreen(),
+                  ),
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Logout'),
@@ -864,6 +912,221 @@ class _CartScreen extends StatelessWidget {
   }
 }
 
+class _RemoteCartScreen extends StatefulWidget {
+  final List<dynamic> items;
+  const _RemoteCartScreen({required this.items});
+
+  @override
+  State<_RemoteCartScreen> createState() => _RemoteCartScreenState();
+}
+
+class _RemoteCartScreenState extends State<_RemoteCartScreen> {
+  final CartService _cartService = CartService();
+  late List<Map<String, dynamic>> _items;
+  bool _updating = false;
+
+  String _extractProductId(Map<String, dynamic> item) {
+    final p = item['product'];
+    if (p is String) return p;
+    if (p is Map && p['_id'] != null) return p['_id'].toString();
+    final pid = item['productId'];
+    if (pid != null) return pid.toString();
+    return '';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _items = widget.items
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  num get _total {
+    num t = 0;
+    for (final it in _items) {
+      final q = (it['quantity'] ?? 0) as int;
+      final p = (it['price'] ?? 0) as num;
+      t += q * p;
+    }
+    return t;
+  }
+
+  Future<void> _setQuantity(String productId, int quantity) async {
+    if (_updating) return;
+    setState(() => _updating = true);
+    try {
+      if (quantity <= 0) {
+        final res = await _cartService.removeItem(productId: productId);
+        if (!mounted) return;
+        if (res['success'] == true) {
+          setState(() {
+            _items.removeWhere(
+              (e) => (e['product']?.toString() ?? '') == productId,
+            );
+          });
+        }
+      } else {
+        final res = await _cartService.updateItem(
+          productId: productId,
+          quantity: quantity,
+        );
+        if (!mounted) return;
+        if (res['success'] == true) {
+          setState(() {
+            final idx = _items.indexWhere(
+              (e) => (e['product']?.toString() ?? '') == productId,
+            );
+            if (idx >= 0) _items[idx]['quantity'] = quantity;
+          });
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  void _proceedToCheckout() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CheckoutScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasItems = _items.isNotEmpty;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Your Cart')),
+      body: !hasItems
+          ? const Center(child: Text('Your cart is empty'))
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final it = _items[index];
+                final name = (it['name'] ?? '').toString();
+                final img = (it['image'] ?? '').toString();
+                final qty = (it['quantity'] ?? 0) as int;
+                final price = (it['price'] ?? 0).toString();
+                final productId = _extractProductId(it);
+                return Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: img.isNotEmpty
+                            ? Image.network(
+                                img,
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                              )
+                            : Container(
+                                width: 56,
+                                height: 56,
+                                color: Colors.grey[300],
+                                child: const Icon(
+                                  Icons.image_not_supported_outlined,
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '₹$price',
+                              style: const TextStyle(color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: _updating
+                                ? null
+                                : () => _setQuantity(productId, qty - 1),
+                            icon: const Icon(Icons.remove),
+                          ),
+                          Text(
+                            qty.toString(),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          IconButton(
+                            onPressed: _updating
+                                ? null
+                                : () => _setQuantity(productId, qty + 1),
+                            icon: const Icon(Icons.add),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFE0E0E0))),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Total', style: TextStyle(color: Colors.black54)),
+                Text(
+                  '₹${_total.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: hasItems ? _proceedToCheckout : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('Checkout'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SellerAnalyticsScreen extends StatefulWidget {
   final String sellerId;
   const _SellerAnalyticsScreen({required this.sellerId});
@@ -872,9 +1135,11 @@ class _SellerAnalyticsScreen extends StatefulWidget {
   State<_SellerAnalyticsScreen> createState() => _SellerAnalyticsScreenState();
 }
 
-class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen> {
+class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen>
+    with TickerProviderStateMixin {
   final ProductService _productService = ProductService();
   final OrderService _orderService = OrderService();
+  late TabController _tabController;
   bool _isLoading = true;
   List<dynamic> _products = [];
   List<dynamic> _orders = [];
@@ -882,7 +1147,14 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -908,88 +1180,205 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Seller Analytics')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddProduct,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Product'),
-        backgroundColor: Colors.black87,
-        foregroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Seller Analytics'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.dashboard), text: 'Dashboard'),
+            Tab(icon: Icon(Icons.inventory), text: 'Products'),
+            Tab(icon: Icon(Icons.receipt), text: 'Orders'),
+          ],
+        ),
       ),
+      floatingActionButton: _tabController.index == 1
+          ? FloatingActionButton.extended(
+              onPressed: _openAddProduct,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Product'),
+              backgroundColor: Colors.black87,
+              foregroundColor: Colors.white,
+            )
+          : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
+          : TabBarView(
+              controller: _tabController,
               children: [
-                _buildStatsHeader(),
-                const SizedBox(height: 16),
-                const Text(
-                  'Your Products',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                if (_products.isEmpty)
-                  const Text('No products found')
-                else
-                  ..._products.map((prod) {
-                    final p = prod as Map<String, dynamic>;
-                    final price =
-                        (p['price']?['selling']?.toString() ??
-                                p['price']?['amount']?.toString() ??
-                                '0')
-                            .toString();
-                    final status = (p['status'] ?? '').toString();
-                    final inventoryQty = (p['inventory']?['quantity'] ?? 0)
-                        .toString();
-                    return Column(
-                      children: [
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(p['name'] ?? 'Product'),
-                          subtitle: Text(
-                            '₹$price • Stock: $inventoryQty • ${status.toUpperCase()}',
-                          ),
-                        ),
-                        const Divider(height: 1),
-                      ],
-                    );
-                  }).toList(),
-                const SizedBox(height: 24),
-                const Text(
-                  'Recent Orders',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                if (_orders.isEmpty)
-                  const Text('No recent orders')
-                else
-                  ..._orders.map((ord) {
-                    final o = ord as Map<String, dynamic>;
-                    final total = _extractTotalAmount(o).toStringAsFixed(2);
-                    final currency = _extractCurrency(o);
-                    final status = (o['status'] ?? '').toString();
-                    final created = (o['createdAt'] ?? '').toString();
-                    final orderNo = (o['orderNumber'] ?? '').toString();
-                    return Column(
-                      children: [
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            orderNo.isNotEmpty
-                                ? orderNo
-                                : 'Order ${o['_id'] ?? ''}',
-                          ),
-                          subtitle: Text(
-                            '$currency $total • ${status.toUpperCase()}',
-                          ),
-                          trailing: Text(created.split('T').first),
-                        ),
-                        const Divider(height: 1),
-                      ],
-                    );
-                  }).toList(),
+                _buildDashboardTab(),
+                _buildProductsTab(),
+                _buildOrdersTab(),
               ],
             ),
+    );
+  }
+
+  Widget _buildDashboardTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildStatsHeader(),
+        const SizedBox(height: 24),
+        _buildQuickActions(),
+        const SizedBox(height: 24),
+        _buildRecentActivity(),
+      ],
+    );
+  }
+
+  Widget _buildProductsTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Your Products',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            Text(
+              '${_products.length} products',
+              style: const TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_products.isEmpty)
+          const Center(
+            child: Column(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No products found', style: TextStyle(color: Colors.grey)),
+                SizedBox(height: 8),
+                Text('Add your first product to get started'),
+              ],
+            ),
+          )
+        else
+          ..._products.map((prod) {
+            final p = prod as Map<String, dynamic>;
+            final price =
+                (p['price']?['selling']?.toString() ??
+                        p['price']?['amount']?.toString() ??
+                        '0')
+                    .toString();
+            final status = (p['status'] ?? '').toString();
+            final inventoryQty = (p['inventory']?['quantity'] ?? 0).toString();
+            return Column(
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(p['name'] ?? 'Product'),
+                  subtitle: Text(
+                    '₹$price • Stock: $inventoryQty • ${status.toUpperCase()}',
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: status == 'active' ? Colors.green : Colors.orange,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      status.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const Divider(height: 1),
+              ],
+            );
+          }).toList(),
+      ],
+    );
+  }
+
+  Widget _buildOrdersTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Recent Orders',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            Text(
+              '${_orders.length} orders',
+              style: const TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_orders.isEmpty)
+          const Center(
+            child: Column(
+              children: [
+                Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No orders found', style: TextStyle(color: Colors.grey)),
+                SizedBox(height: 8),
+                Text('Orders will appear here when customers place them'),
+              ],
+            ),
+          )
+        else
+          ..._orders.map((ord) {
+            final o = ord as Map<String, dynamic>;
+            final total = _extractTotalAmount(o).toStringAsFixed(2);
+            final currency = _extractCurrency(o);
+            final status = (o['status'] ?? '').toString();
+            final created = (o['createdAt'] ?? '').toString();
+            final orderNo = (o['orderNumber'] ?? '').toString();
+            return Column(
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    orderNo.isNotEmpty ? orderNo : 'Order ${o['_id'] ?? ''}',
+                  ),
+                  subtitle: Text('$currency $total • ${status.toUpperCase()}'),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(created.split('T').first),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(status),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          status.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+              ],
+            );
+          }).toList(),
+      ],
     );
   }
 
@@ -1035,6 +1424,216 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildQuickActions() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Quick Actions',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionCard(
+                  icon: Icons.add,
+                  title: 'Add Product',
+                  onTap: _openAddProduct,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionCard(
+                  icon: Icons.analytics,
+                  title: 'View Analytics',
+                  onTap: () {
+                    // Switch to dashboard tab
+                    _tabController.animateTo(0);
+                  },
+                  color: Colors.green,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionCard({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    required Color color,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentActivity() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Recent Activity',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 16),
+          if (_orders.isEmpty && _products.isEmpty)
+            const Center(
+              child: Column(
+                children: [
+                  Icon(Icons.timeline, size: 48, color: Colors.grey),
+                  SizedBox(height: 8),
+                  Text(
+                    'No recent activity',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ],
+              ),
+            )
+          else
+            ..._buildActivityItems(),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildActivityItems() {
+    List<Widget> items = [];
+
+    // Add recent orders
+    for (int i = 0; i < _orders.take(3).length; i++) {
+      final order = _orders[i] as Map<String, dynamic>;
+      final status = (order['status'] ?? '').toString();
+      final total = _extractTotalAmount(order).toStringAsFixed(2);
+      final currency = _extractCurrency(order);
+
+      items.add(
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _getStatusColor(status).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.receipt,
+              color: _getStatusColor(status),
+              size: 20,
+            ),
+          ),
+          title: Text('New order received'),
+          subtitle: Text('$currency $total • ${status.toUpperCase()}'),
+          trailing: Text(
+            (order['createdAt'] ?? '').toString().split('T').first,
+            style: const TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ),
+      );
+    }
+
+    // Add recent products
+    for (int i = 0; i < _products.take(2).length; i++) {
+      final product = _products[i] as Map<String, dynamic>;
+      final name = product['name'] ?? 'Product';
+      final status = (product['status'] ?? '').toString();
+
+      items.add(
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: status == 'active'
+                  ? Colors.green.withOpacity(0.1)
+                  : Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.inventory,
+              color: status == 'active' ? Colors.green : Colors.orange,
+              size: 20,
+            ),
+          ),
+          title: Text('Product: $name'),
+          subtitle: Text('Status: ${status.toUpperCase()}'),
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'confirmed':
+        return Colors.blue;
+      case 'shipped':
+        return Colors.purple;
+      case 'delivered':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   num _extractTotalAmount(Map<String, dynamic> order) {
