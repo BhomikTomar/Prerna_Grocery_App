@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/order_service.dart';
+import '../services/auth_service.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -13,11 +14,14 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Map<String, dynamic>? _order;
   bool _isLoading = false;
+  bool _isSeller = false;
+  bool _isUpdatingStatus = false;
 
   @override
   void initState() {
     super.initState();
     _loadOrderDetails();
+    _checkUserRole();
   }
 
   Future<void> _loadOrderDetails() async {
@@ -33,6 +37,124 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result['message'])));
+    }
+  }
+
+  Future<void> _checkUserRole() async {
+    final user = await AuthService().getCurrentUser();
+    if (user != null) {
+      final userType = (user['userType'] ?? user['role'] ?? '')
+          .toString()
+          .toLowerCase();
+      setState(() {
+        _isSeller = userType == 'seller' || userType == 'vendor';
+      });
+    }
+  }
+
+  Future<void> _updateOrderStatus(String newStatus) async {
+    setState(() => _isUpdatingStatus = true);
+
+    final result = await OrderService().updateOrderStatus(
+      orderId: widget.orderId,
+      status: newStatus,
+    );
+
+    setState(() => _isUpdatingStatus = false);
+
+    if (result['success']) {
+      setState(() => _order = result['order']);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Order status updated to ${newStatus.toUpperCase()}'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Failed to update order status'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showStatusUpdateDialog() {
+    final currentStatus = _order!['status']?.toString().toLowerCase() ?? '';
+    final validStatuses = _getNextValidStatuses(currentStatus);
+
+    if (validStatuses.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No status updates available for this order'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Update Order Status'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: validStatuses
+              .map(
+                (status) => ListTile(
+                  title: Text(status.toUpperCase()),
+                  subtitle: Text(_getStatusDescription(status)),
+                  leading: Icon(
+                    _getStatusIcon(status),
+                    color: _getStatusColor(status),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _updateOrderStatus(status);
+                  },
+                ),
+              )
+              .toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _getNextValidStatuses(String currentStatus) {
+    switch (currentStatus) {
+      case 'placed':
+        return ['confirmed', 'cancelled'];
+      case 'confirmed':
+        return ['shipped', 'cancelled'];
+      case 'shipped':
+        return ['delivered'];
+      case 'delivered':
+      case 'cancelled':
+        return []; // No further updates allowed
+      default:
+        return ['confirmed', 'cancelled'];
+    }
+  }
+
+  String _getStatusDescription(String status) {
+    switch (status.toLowerCase()) {
+      case 'confirmed':
+        return 'Confirm the order and prepare for shipping';
+      case 'shipped':
+        return 'Mark order as shipped and in transit';
+      case 'delivered':
+        return 'Mark order as successfully delivered';
+      case 'cancelled':
+        return 'Cancel the order';
+      default:
+        return 'Update order status';
     }
   }
 
@@ -147,6 +269,40 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   ],
                                 ),
                               ),
+                              if (_isSeller) ...[
+                                const SizedBox(width: 8),
+                                ElevatedButton.icon(
+                                  onPressed: _isUpdatingStatus
+                                      ? null
+                                      : _showStatusUpdateDialog,
+                                  icon: _isUpdatingStatus
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
+                                          ),
+                                        )
+                                      : const Icon(Icons.edit, size: 16),
+                                  label: Text(
+                                    _isUpdatingStatus
+                                        ? 'Updating...'
+                                        : 'Update Status',
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 12),

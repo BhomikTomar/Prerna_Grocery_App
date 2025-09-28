@@ -12,6 +12,7 @@ import 'products_screen.dart';
 import 'product_detail_screen.dart';
 import 'checkout_screen.dart';
 import 'order_history_screen.dart';
+import 'order_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -1339,6 +1340,7 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen>
             final status = (o['status'] ?? '').toString();
             final created = (o['createdAt'] ?? '').toString();
             final orderNo = (o['orderNumber'] ?? '').toString();
+            final orderId = o['_id']?.toString() ?? '';
             return Column(
               children: [
                 ListTile(
@@ -1373,6 +1375,17 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen>
                       ),
                     ],
                   ),
+                  onTap: () {
+                    if (orderId.isNotEmpty) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              OrderDetailScreen(orderId: orderId),
+                        ),
+                      );
+                    }
+                  },
                 ),
                 const Divider(height: 1),
               ],
@@ -1583,6 +1596,17 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen>
             (order['createdAt'] ?? '').toString().split('T').first,
             style: const TextStyle(color: Colors.grey, fontSize: 12),
           ),
+          onTap: () {
+            final orderId = order['_id']?.toString() ?? '';
+            if (orderId.isNotEmpty) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OrderDetailScreen(orderId: orderId),
+                ),
+              );
+            }
+          },
         ),
       );
     }
