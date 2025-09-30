@@ -523,7 +523,26 @@ class _HomeScreenState extends State<HomeScreen> {
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final p = products[index] as Map<String, dynamic>;
-          final price = _extractProductPriceString(p);
+          final priceMap = p['price'];
+          num? _toNum(dynamic v) {
+            if (v is num) return v;
+            if (v is String) return num.tryParse(v);
+            return null;
+          }
+
+          final num? selling = priceMap is Map
+              ? (_toNum(priceMap['selling']) ?? _toNum(priceMap['amount']))
+              : _toNum(priceMap);
+          final num? mrp = priceMap is Map
+              ? (_toNum(priceMap['mrp']) ??
+                    _toNum(priceMap['list']) ??
+                    _toNum(priceMap['original']) ??
+                    _toNum(priceMap['mrpAmount']))
+              : null;
+          final int? discountPct =
+              (mrp != null && selling != null && mrp > 0 && selling < mrp)
+              ? (((mrp - selling) / mrp) * 100).round()
+              : null;
           final images = p['images'] as List<dynamic>? ?? [];
           final image = images.isNotEmpty ? images[0] : null;
           final inStock = (p['inventory']?['quantity'] ?? 0) > 0;
@@ -559,31 +578,58 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: image != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                image.toString(),
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stack) =>
-                                    const Center(
-                                      child: Icon(
-                                        Icons.image_not_supported_outlined,
-                                      ),
-                                    ),
+                    child: Stack(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: image != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    image.toString(),
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stack) =>
+                                        const Center(
+                                          child: Icon(
+                                            Icons.image_not_supported_outlined,
+                                          ),
+                                        ),
+                                  ),
+                                )
+                              : const Center(
+                                  child: Icon(
+                                    Icons.shopping_bag_outlined,
+                                    size: 40,
+                                  ),
+                                ),
+                        ),
+                        if (discountPct != null)
+                          Positioned(
+                            left: 6,
+                            top: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
                               ),
-                            )
-                          : const Center(
-                              child: Icon(
-                                Icons.shopping_bag_outlined,
-                                size: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.orange[700],
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '$discountPct% OFF',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -600,12 +646,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '₹$price',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            '₹${(selling ?? 0).toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          if (mrp != null && selling != null && mrp > selling)
+                            Text(
+                              '₹${mrp.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                        ],
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -1763,7 +1823,8 @@ class _AddProductScreenState extends State<_AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _priceController = TextEditingController();
+  final _mrpController = TextEditingController();
+  final _sellingController = TextEditingController();
   final _quantityController = TextEditingController();
   final _imageUrlController = TextEditingController();
   String? _selectedCategoryId;
@@ -1791,7 +1852,8 @@ class _AddProductScreenState extends State<_AddProductScreen> {
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
-    _priceController.dispose();
+    _mrpController.dispose();
+    _sellingController.dispose();
     _quantityController.dispose();
     _imageUrlController.dispose();
     super.dispose();
@@ -1841,13 +1903,30 @@ class _AddProductScreenState extends State<_AddProductScreen> {
               ),
               const SizedBox(height: 12),
               TextFormField(
-                controller: _priceController,
+                controller: _mrpController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Price (amount)'),
+                decoration: const InputDecoration(labelText: 'MRP'),
                 validator: (v) {
                   final n = num.tryParse(v?.trim() ?? '');
                   if (n == null) return 'Enter a valid number';
-                  if (n < 0) return 'Price cannot be negative';
+                  if (n <= 0) return 'MRP must be greater than 0';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _sellingController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Selling Price'),
+                validator: (v) {
+                  final selling = num.tryParse(v?.trim() ?? '');
+                  final mrp = num.tryParse(_mrpController.text.trim());
+                  if (selling == null) return 'Enter a valid number';
+                  if (selling <= 0)
+                    return 'Selling price must be greater than 0';
+                  if (mrp != null && selling > mrp) {
+                    return 'Selling price cannot exceed MRP';
+                  }
                   return null;
                 },
               ),
@@ -1898,7 +1977,8 @@ class _AddProductScreenState extends State<_AddProductScreen> {
       'description': _descriptionController.text.trim(),
       'category': _selectedCategoryId,
       'price': {
-        'amount': num.parse(_priceController.text.trim()),
+        'mrp': num.parse(_mrpController.text.trim()),
+        'selling': num.parse(_sellingController.text.trim()),
         'currency': 'INR',
       },
       'inventory': {

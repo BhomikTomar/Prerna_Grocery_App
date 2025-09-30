@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/product_service.dart';
 import '../services/cart_service.dart';
+import '../services/review_service.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String productId;
@@ -17,6 +18,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Map<String, dynamic>? _product;
   String? _error;
   int _quantity = 1;
+  List<dynamic> _reviews = [];
+  bool _loadingReviews = false;
 
   @override
   void initState() {
@@ -33,6 +36,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         _product = res['product'];
       } else {
         _error = res['message']?.toString() ?? 'Failed to load product';
+      }
+    });
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    setState(() => _loadingReviews = true);
+    final res = await ReviewService().getProductReviews(
+      productId: widget.productId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _loadingReviews = false;
+      if (res['success'] == true) {
+        _reviews = res['reviews'] ?? [];
       }
     });
   }
@@ -100,55 +118,102 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Widget _buildBody() {
     final p = _product!;
     final images = (p['images'] as List<dynamic>?) ?? [];
-    final price =
-        p['price']?['selling']?.toString() ??
-        p['price']?['amount']?.toString() ??
-        '0';
-    final currency = p['price']?['currency']?.toString() ?? 'INR';
+
+    num? _toNum(dynamic v) {
+      if (v is num) return v;
+      if (v is String) return num.tryParse(v);
+      return null;
+    }
+
+    final priceMap = p['price'];
+    final num? selling = priceMap is Map
+        ? (_toNum(priceMap['selling']) ?? _toNum(priceMap['amount']))
+        : _toNum(priceMap);
+    final num? mrp = priceMap is Map
+        ? (_toNum(priceMap['mrp']) ??
+              _toNum(priceMap['list']) ??
+              _toNum(priceMap['original']) ??
+              _toNum(priceMap['mrpAmount']))
+        : null;
+    final String currency = (priceMap is Map && priceMap['currency'] != null)
+        ? priceMap['currency'].toString()
+        : 'INR';
+    final int? discountPct =
+        (mrp != null && selling != null && mrp > 0 && selling < mrp)
+        ? (((mrp - selling) / mrp) * 100).round()
+        : null;
+
     final inventory = p['inventory']?['quantity'] ?? 0;
     final inStock = (inventory is num ? inventory > 0 : false);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Image carousel (basic)
-        SizedBox(
-          height: 260,
-          child: PageView.builder(
-            itemCount: images.isEmpty ? 1 : images.length,
-            itemBuilder: (context, index) {
-              if (images.isEmpty) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
+        // Image carousel (with discount badge)
+        Stack(
+          children: [
+            SizedBox(
+              height: 260,
+              child: PageView.builder(
+                itemCount: images.isEmpty ? 1 : images.length,
+                itemBuilder: (context, index) {
+                  if (images.isEmpty) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.shopping_bag_outlined,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    );
+                  }
+                  final img = images[index];
+                  return ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.shopping_bag_outlined,
-                      size: 64,
-                      color: Colors.grey,
+                    child: Image.network(
+                      img.toString(),
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stack) => Container(
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: Icon(Icons.image_not_supported_outlined),
+                        ),
+                      ),
                     ),
+                  );
+                },
+              ),
+            ),
+            if (discountPct != null)
+              Positioned(
+                left: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
                   ),
-                );
-              }
-              final img = images[index];
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  img.toString(),
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stack) => Container(
-                    color: Colors.grey[200],
-                    child: const Center(
-                      child: Icon(Icons.image_not_supported_outlined),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[700],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$discountPct% OFF',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
                     ),
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+          ],
         ),
         const SizedBox(height: 16),
         Text(
@@ -168,13 +233,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              '$currency $price',
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+            Row(
+              children: [
+                Text(
+                  '${currency == 'INR' ? '₹' : '$currency '}${(selling ?? 0).toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (mrp != null && selling != null && mrp > selling)
+                  Text(
+                    '${currency == 'INR' ? '₹' : '$currency '}${mrp.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+              ],
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -203,6 +282,93 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ],
           ),
         ],
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Reviews',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                if (_loadingReviews)
+                  const Center(child: CircularProgressIndicator())
+                else if (_reviews.isEmpty)
+                  const Text('No reviews yet')
+                else
+                  ..._reviews.map((r) {
+                    final int rating = (r['rating'] ?? 0) as int;
+                    final String comment = (r['comment'] ?? '').toString();
+                    final String user = (r['user']?['name'] ?? 'User')
+                        .toString();
+                    final String createdAt = (r['createdAt'] ?? '').toString();
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List.generate(
+                              5,
+                              (i) => Icon(
+                                i < rating ? Icons.star : Icons.star_border,
+                                color: Colors.amber,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(comment.isEmpty ? 'No comment' : comment),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$user • ${createdAt.split('T').first}',
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                const SizedBox(height: 12),
+                _ReviewInput(
+                  productId: widget.productId,
+                  onSubmitted: (rating, comment) async {
+                    final res = await ReviewService().addReview(
+                      productId: widget.productId,
+                      rating: rating,
+                      comment: comment,
+                    );
+                    if (!mounted) return;
+                    if (res['success'] == true) {
+                      setState(() {
+                        _reviews.insert(0, res['review']);
+                      });
+                    } else {
+                      final msg = (res['message'] ?? 'Failed to add review')
+                          .toString();
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(msg)));
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -229,6 +395,85 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       final msg = res['message']?.toString() ?? 'Failed to add to cart';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
+  }
+}
+
+class _ReviewInput extends StatefulWidget {
+  final String productId;
+  final Future<void> Function(int rating, String comment) onSubmitted;
+  const _ReviewInput({required this.productId, required this.onSubmitted});
+
+  @override
+  State<_ReviewInput> createState() => _ReviewInputState();
+}
+
+class _ReviewInputState extends State<_ReviewInput> {
+  int _rating = 0;
+  final TextEditingController _controller = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: List.generate(
+            5,
+            (i) => IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: Icon(
+                i < _rating ? Icons.star : Icons.star_border,
+                color: Colors.amber,
+              ),
+              onPressed: () => setState(() => _rating = i + 1),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _controller,
+          decoration: const InputDecoration(
+            hintText: 'Write a review (optional)',
+            border: OutlineInputBorder(),
+          ),
+          minLines: 1,
+          maxLines: 3,
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton(
+            onPressed: _submitting
+                ? null
+                : () async {
+                    if (_rating <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a rating')),
+                      );
+                      return;
+                    }
+                    setState(() => _submitting = true);
+                    await widget.onSubmitted(_rating, _controller.text.trim());
+                    if (!mounted) return;
+                    setState(() {
+                      _submitting = false;
+                      _rating = 0;
+                      _controller.clear();
+                    });
+                  },
+            child: Text(_submitting ? 'Submitting...' : 'Submit Review'),
+          ),
+        ),
+      ],
+    );
   }
 }
 

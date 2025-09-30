@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/search_service.dart';
+import 'product_detail_screen.dart';
 
 class SearchResultsScreen extends StatefulWidget {
   final String searchQuery;
@@ -169,7 +170,20 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
             itemCount: _products.length,
             itemBuilder: (context, index) {
               final product = _products[index];
-              return _buildProductCard(product);
+              return GestureDetector(
+                onTap: () {
+                  final id = product['_id']?.toString();
+                  if (id != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProductDetailScreen(productId: id),
+                      ),
+                    );
+                  }
+                },
+                child: _buildProductCard(product),
+              );
             },
           ),
         ),
@@ -178,12 +192,29 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   Widget _buildProductCard(Map<String, dynamic> product) {
-    // Handle different price structures
-    final price =
-        product['price']?['selling']?.toString() ??
-        product['price']?['amount']?.toString() ??
-        '0';
-    final currency = product['price']?['currency'] ?? 'USD';
+    num? _toNum(dynamic v) {
+      if (v is num) return v;
+      if (v is String) return num.tryParse(v);
+      return null;
+    }
+
+    final priceMap = product['price'];
+    final num? selling = priceMap is Map
+        ? (_toNum(priceMap['selling']) ?? _toNum(priceMap['amount']))
+        : _toNum(priceMap);
+    final num? mrp = priceMap is Map
+        ? (_toNum(priceMap['mrp']) ??
+              _toNum(priceMap['list']) ??
+              _toNum(priceMap['original']) ??
+              _toNum(priceMap['mrpAmount']))
+        : null;
+    final String currency = (priceMap is Map && priceMap['currency'] != null)
+        ? priceMap['currency'].toString()
+        : 'INR';
+    final int? discountPct =
+        (mrp != null && selling != null && mrp > 0 && selling < mrp)
+        ? (((mrp - selling) / mrp) * 100).round()
+        : null;
     final images = product['images'] as List<dynamic>? ?? [];
     final firstImage = images.isNotEmpty ? images[0] : null;
     final inventory = product['inventory']?['quantity'] ?? 0;
@@ -208,74 +239,101 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
           // Product Image
           Expanded(
             flex: 3,
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
-                ),
-                color: Colors.grey[100],
-              ),
-              child: firstImage != null
-                  ? ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(12),
-                      ),
-                      child: Image.network(
-                        firstImage,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: Colors.grey[200],
-                            child: const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.shopping_bag_outlined,
-                                    size: 48,
+            child: Stack(
+              children: [
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
+                    color: Colors.grey[100],
+                  ),
+                  child: firstImage != null
+                      ? ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(12),
+                          ),
+                          child: Image.network(
+                            firstImage,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[200],
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.shopping_bag_outlined,
+                                        size: 48,
+                                        color: Color(0xFF2E7D32),
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Product Image',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF2E7D32),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.shopping_bag_outlined,
+                                  size: 48,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Product Image',
+                                  style: TextStyle(
+                                    fontSize: 12,
                                     color: Color(0xFF2E7D32),
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'Product Image',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF2E7D32),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          );
-                        },
+                          ),
+                        ),
+                ),
+                if (discountPct != null)
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                    )
-                  : Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.shopping_bag_outlined,
-                              size: 48,
-                              color: Color(0xFF2E7D32),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Product Image',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF2E7D32),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                      decoration: BoxDecoration(
+                        color: Colors.orange[700],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '$discountPct% OFF',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
+                  ),
+              ],
             ),
           ),
           // Product Details
@@ -307,13 +365,27 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '$currency $price',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2E7D32),
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            '${currency == 'INR' ? '₹' : '$currency '}${(selling ?? 0).toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          if (mrp != null && selling != null && mrp > selling)
+                            Text(
+                              '${currency == 'INR' ? '₹' : '$currency '}${mrp.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                        ],
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
