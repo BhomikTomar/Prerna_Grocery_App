@@ -111,7 +111,7 @@ npm install mongodb bcryptjs jsonwebtoken
 ## Environment Variables
 Create a `.env` file in your backend:
 ```
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database
+MONGODB_URI=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/YOUR_DATABASE
 JWT_SECRET=your_jwt_secret_key
 GOOGLE_CLIENT_ID=your_google_client_id
 ```

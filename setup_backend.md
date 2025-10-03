@@ -24,7 +24,7 @@ cp .env.example .env
 ### 4. Update MongoDB Connection
 Edit the `.env` file and replace:
 ```env
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/prerna_grocery?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/prerna_grocery?retryWrites=true&w=majority
 ```
 
 With your actual MongoDB Atlas connection string from your cluster.
