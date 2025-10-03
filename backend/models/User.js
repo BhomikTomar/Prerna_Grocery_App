@@ -27,6 +27,85 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isPhoneVerified: {
+    type: Boolean,
+    default: false
+  },
+  isProfileComplete: {
+    type: Boolean,
+    default: false
+  },
+  // Email verification fields
+  verificationCode: {
+    type: String,
+    select: false // Don't include in queries by default
+  },
+  verificationCodeExpires: {
+    type: Date,
+    select: false // Don't include in queries by default
+  },
+  // Phone verification fields
+  phoneNumber: {
+    type: String,
+    trim: true
+  },
+  phoneVerificationCode: {
+    type: String,
+    select: false // Don't include in queries by default
+  },
+  phoneVerificationExpires: {
+    type: Date,
+    select: false // Don't include in queries by default
+  },
+  // Profile information
+  profile: {
+    firstName: {
+      type: String,
+      trim: true,
+      maxlength: [50, 'First name cannot be more than 50 characters']
+    },
+    lastName: {
+      type: String,
+      trim: true,
+      maxlength: [50, 'Last name cannot be more than 50 characters']
+    },
+    avatar: {
+      type: String,
+      default: 'default_avatar_url'
+    }
+  },
+  // Addresses array
+  addresses: [{
+    type: {
+      type: String,
+      enum: ['home', 'work', 'other'],
+      default: 'home'
+    },
+    street: {
+      type: String,
+      required: [true, 'Street is required'],
+      trim: true
+    },
+    city: {
+      type: String,
+      required: [true, 'City is required'],
+      trim: true
+    },
+    state: {
+      type: String,
+      required: [true, 'State is required'],
+      trim: true
+    },
+    pincode: {
+      type: String,
+      required: [true, 'Pincode is required'],
+      trim: true
+    },
+    isDefault: {
+      type: Boolean,
+      default: false
+    }
+  }],
   // Optional fields that can be added later
   name: {
     type: String,

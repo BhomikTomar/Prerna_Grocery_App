@@ -163,4 +163,38 @@ class ProductService {
       return {'success': false, 'message': 'Network error: ${e.toString()}'};
     }
   }
+
+  // Update a product (seller)
+  Future<Map<String, dynamic>> updateProduct(
+    String productId,
+    Map<String, dynamic> product,
+  ) async {
+    try {
+      final auth = AuthService();
+      final token = await auth.getToken();
+      if (token == null) {
+        return {'success': false, 'message': 'Not authenticated'};
+      }
+      final response = await http.put(
+        Uri.parse('$_baseUrl/products/$productId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(product),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {'success': true, 'product': data['data']};
+      } else {
+        final error = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': error['message'] ?? 'Failed to update product',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
+    }
+  }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/cart_service.dart';
 import '../services/order_service.dart';
+import '../services/auth_service.dart';
+import 'user_profile_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({Key? key}) : super(key: key);
@@ -19,11 +21,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _isLoading = false;
   Map<String, dynamic>? _cart;
   double _totalAmount = 0.0;
+  Map<String, dynamic>? _currentUser;
 
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     _loadCart();
+  }
+
+  Future<void> _loadUserData() async {
+    final user = await AuthService().getOrFetchCurrentUser();
+    setState(() {
+      _currentUser = user;
+    });
   }
 
   @override
@@ -57,8 +68,51 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  bool _isEmailVerified() {
+    return _currentUser?['isEmailVerified'] == true;
+  }
+
+  void _showEmailVerificationRequired() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Email Verification Required'),
+        content: const Text(
+          'Please verify your email address before placing an order. You can verify your email in your profile settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const UserProfileScreen(),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Go to Profile'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _placeOrder() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Check if email is verified
+    if (!_isEmailVerified()) {
+      _showEmailVerificationRequired();
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -226,6 +280,55 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                     const SizedBox(height: 24),
 
+                    // Email Verification Status
+                    if (!_isEmailVerified()) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          border: Border.all(color: Colors.orange),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning, color: Colors.orange),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Email Verification Required',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  const Text(
+                                    'Please verify your email address before placing an order.',
+                                    style: TextStyle(fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const UserProfileScreen(),
+                                  ),
+                                );
+                              },
+                              child: const Text('Verify Email'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
                     // Delivery Address Section
                     const Text(
                       'Delivery Address',
@@ -366,7 +469,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: _isLoading ? null : _placeOrder,
+                        onPressed: (_isLoading || !_isEmailVerified())
+                            ? null
+                            : _placeOrder,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                           foregroundColor: Colors.white,
@@ -378,9 +483,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             ? const CircularProgressIndicator(
                                 color: Colors.white,
                               )
-                            : const Text(
-                                'Place Order',
-                                style: TextStyle(
+                            : Text(
+                                !_isEmailVerified()
+                                    ? 'Verify Email to Place Order'
+                                    : 'Place Order',
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),

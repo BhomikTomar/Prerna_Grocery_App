@@ -42,6 +42,10 @@ router.post('/register', validateRegistration, async (req, res) => {
         email: user.email,
         userType: user.userType,
         isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        isProfileComplete: user.isProfileComplete,
+        profile: user.profile,
+        addresses: user.addresses,
         name: user.name,
         phone: user.phone,
         createdAt: user.createdAt
@@ -99,6 +103,10 @@ router.post('/login', validateLogin, async (req, res) => {
         email: user.email,
         userType: user.userType,
         isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        isProfileComplete: user.isProfileComplete,
+        profile: user.profile,
+        addresses: user.addresses,
         name: user.name,
         phone: user.phone,
         createdAt: user.createdAt
@@ -216,13 +224,15 @@ router.get('/me', protect, async (req, res) => {
 // @desc    Update user profile
 // @route   PUT /api/users/profile
 // @access  Private
-router.put('/profile', protect, validateProfileUpdate, async (req, res) => {
+router.put('/profile', protect, async (req, res) => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, profile, addresses } = req.body;
     const updateData = {};
 
     if (name) updateData.name = name;
     if (phone) updateData.phone = phone;
+    if (profile) updateData.profile = profile;
+    if (addresses) updateData.addresses = addresses;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -235,9 +245,16 @@ router.put('/profile', protect, validateProfileUpdate, async (req, res) => {
       message: 'Profile updated successfully',
       user: {
         id: user._id,
-        name: user.name,
         email: user.email,
+        userType: user.userType,
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        isProfileComplete: user.isProfileComplete,
+        profile: user.profile,
+        addresses: user.addresses,
+        name: user.name,
         phone: user.phone,
+        createdAt: user.createdAt,
         updatedAt: user.updatedAt
       }
     });

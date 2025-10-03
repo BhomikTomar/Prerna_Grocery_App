@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 import '../services/category_service.dart';
 import '../services/product_service.dart';
 import '../services/order_service.dart';
 import '../services/cart_service.dart';
+import '../services/image_service.dart';
 import '../widgets/categories_section.dart';
+import '../widgets/product_image_carousel.dart';
 import 'login_screen.dart';
 import 'search_results_screen.dart';
 import 'products_screen.dart';
@@ -13,6 +16,7 @@ import 'product_detail_screen.dart';
 import 'checkout_screen.dart';
 import 'order_history_screen.dart';
 import 'order_detail_screen.dart';
+import 'user_profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -544,7 +548,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ? (((mrp - selling) / mrp) * 100).round()
               : null;
           final images = p['images'] as List<dynamic>? ?? [];
-          final image = images.isNotEmpty ? images[0] : null;
           final inStock = (p['inventory']?['quantity'] ?? 0) > 0;
 
           return GestureDetector(
@@ -580,31 +583,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: Stack(
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: image != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(
-                                    image.toString(),
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (context, error, stack) =>
-                                        const Center(
-                                          child: Icon(
-                                            Icons.image_not_supported_outlined,
-                                          ),
-                                        ),
-                                  ),
-                                )
-                              : const Center(
-                                  child: Icon(
-                                    Icons.shopping_bag_outlined,
-                                    size: 40,
-                                  ),
-                                ),
+                        ProductImageCarousel(
+                          images: images,
+                          height: double.infinity,
+                          width: double.infinity,
+                          borderRadius: BorderRadius.circular(12),
+                          fit: BoxFit.contain,
+                          showDots: images.length > 1,
+                          showImageCount: false, // Hide count for small cards
                         ),
                         if (discountPct != null)
                           Positioned(
@@ -769,6 +755,19 @@ class _HomeScreenState extends State<HomeScreen> {
               subtitle: Text(user?['email'] ?? ''),
             ),
             const Divider(),
+            ListTile(
+              leading: const Icon(Icons.person),
+              title: const Text('My Profile'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const UserProfileScreen(),
+                  ),
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.shopping_bag_outlined),
               title: const Text('Order History'),
@@ -1047,7 +1046,53 @@ class _RemoteCartScreenState extends State<_RemoteCartScreen> {
     }
   }
 
-  void _proceedToCheckout() {
+  void _proceedToCheckout() async {
+    // Check if user is logged in and email is verified
+    final user = await AuthService().getOrFetchCurrentUser();
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to continue'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (user['isEmailVerified'] != true) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Email Verification Required'),
+          content: const Text(
+            'Please verify your email address before placing an order. You can verify your email in your profile settings.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const UserProfileScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Go to Profile'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CheckoutScreen()),
@@ -1327,6 +1372,7 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen>
                     .toString();
             final status = (p['status'] ?? '').toString();
             final inventoryQty = (p['inventory']?['quantity'] ?? 0).toString();
+            final productId = p['_id']?.toString() ?? '';
             return Column(
               children: [
                 ListTile(
@@ -1335,23 +1381,36 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen>
                   subtitle: Text(
                     '₹$price • Stock: $inventoryQty • ${status.toUpperCase()}',
                   ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: status == 'active' ? Colors.green : Colors.orange,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      status.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: status == 'active'
+                              ? Colors.green
+                              : Colors.orange,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          status.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () => _editProduct(productId, p),
+                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        tooltip: 'Edit Product',
+                      ),
+                    ],
                   ),
                 ),
                 const Divider(height: 1),
@@ -1809,6 +1868,21 @@ class _SellerAnalyticsScreenState extends State<_SellerAnalyticsScreen>
       _loadData();
     }
   }
+
+  void _editProduct(String productId, Map<String, dynamic> product) async {
+    final updated = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _EditProductScreen(
+          sellerId: widget.sellerId,
+          productId: productId,
+          product: product,
+        ),
+      ),
+    );
+    if (updated == true) {
+      _loadData();
+    }
+  }
 }
 
 class _AddProductScreen extends StatefulWidget {
@@ -1826,10 +1900,11 @@ class _AddProductScreenState extends State<_AddProductScreen> {
   final _mrpController = TextEditingController();
   final _sellingController = TextEditingController();
   final _quantityController = TextEditingController();
-  final _imageUrlController = TextEditingController();
   String? _selectedCategoryId;
   bool _submitting = false;
   List<dynamic> _categories = [];
+  List<XFile> _selectedImages = [];
+  bool _uploadingImages = false;
 
   final ProductService _productService = ProductService();
   final CategoryService _categoryService = CategoryService();
@@ -1848,6 +1923,52 @@ class _AddProductScreenState extends State<_AddProductScreen> {
     });
   }
 
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> images = await ImageService.pickImages(maxImages: 5);
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages = images;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error picking images: $e')));
+      }
+    }
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final List<XFile> images = await ImageService.pickImages(
+        source: ImageSource.camera,
+        maxImages: 1,
+      );
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages.addAll(images);
+          if (_selectedImages.length > 5) {
+            _selectedImages = _selectedImages.take(5).toList();
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error taking photo: $e')));
+      }
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -1855,7 +1976,6 @@ class _AddProductScreenState extends State<_AddProductScreen> {
     _mrpController.dispose();
     _sellingController.dispose();
     _quantityController.dispose();
-    _imageUrlController.dispose();
     super.dispose();
   }
 
@@ -1943,23 +2063,149 @@ class _AddProductScreenState extends State<_AddProductScreen> {
                 },
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _imageUrlController,
-                decoration: const InputDecoration(labelText: 'Image URL'),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Required' : null,
+              // Image Selection Section
+              Text(
+                'Product Images',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
+              const SizedBox(height: 8),
+              // Image picker buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _pickImages,
+                      icon: const Icon(Icons.photo_library),
+                      label: const Text('Gallery'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade100,
+                        foregroundColor: Colors.blue.shade800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _pickImageFromCamera,
+                      icon: const Icon(Icons.camera_alt),
+                      label: const Text('Camera'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade100,
+                        foregroundColor: Colors.green.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Selected images preview
+              if (_selectedImages.isNotEmpty) ...[
+                Text(
+                  'Selected Images (${_selectedImages.length}/5)',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _selectedImages.length,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ImageService.getImagePreview(
+                              _selectedImages[index],
+                              width: 100,
+                              height: 100,
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: () => _removeImage(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ] else ...[
+                Container(
+                  height: 100,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.image, size: 40, color: Colors.grey),
+                        SizedBox(height: 8),
+                        Text('No images selected'),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              // Validation for images
+              if (_selectedImages.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Please select at least one image',
+                    style: TextStyle(color: Colors.red.shade600, fontSize: 12),
+                  ),
+                ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _submitting ? null : _submit,
+                  onPressed: (_submitting || _uploadingImages) ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black87,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: Text(_submitting ? 'Adding...' : 'Add Product'),
+                  child: _uploadingImages
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text('Uploading Images...'),
+                          ],
+                        )
+                      : Text(_submitting ? 'Adding Product...' : 'Add Product'),
                 ),
               ),
             ],
@@ -1971,33 +2217,613 @@ class _AddProductScreenState extends State<_AddProductScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _submitting = true);
-    final product = {
-      'name': _nameController.text.trim(),
-      'description': _descriptionController.text.trim(),
-      'category': _selectedCategoryId,
-      'price': {
-        'mrp': num.parse(_mrpController.text.trim()),
-        'selling': num.parse(_sellingController.text.trim()),
-        'currency': 'INR',
-      },
-      'inventory': {
-        'quantity': int.parse(_quantityController.text.trim()),
-        'lowStockThreshold': 10,
-      },
-      'images': [_imageUrlController.text.trim()],
-      'tags': [],
-      'status': 'active',
-    };
-    final res = await _productService.createProduct(product);
-    if (!mounted) return;
-    setState(() => _submitting = false);
-    if (res['success'] == true) {
-      Navigator.of(context).pop(true);
-    } else {
+
+    // Validate images
+    if (_selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res['message']?.toString() ?? 'Failed')),
+        const SnackBar(content: Text('Please select at least one image')),
       );
+      return;
+    }
+
+    setState(() => _submitting = true);
+
+    try {
+      // Upload images first
+      setState(() => _uploadingImages = true);
+      final List<String> imageUrls = await ImageService.uploadImages(
+        _selectedImages,
+      );
+
+      if (imageUrls.isEmpty) {
+        setState(() => _submitting = false);
+        setState(() => _uploadingImages = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload images')),
+          );
+        }
+        return;
+      }
+
+      // Create product with uploaded image URLs
+      final product = {
+        'name': _nameController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'category': _selectedCategoryId,
+        'price': {
+          'mrp': num.parse(_mrpController.text.trim()),
+          'selling': num.parse(_sellingController.text.trim()),
+          'currency': 'INR',
+        },
+        'inventory': {
+          'quantity': int.parse(_quantityController.text.trim()),
+          'lowStockThreshold': 10,
+        },
+        'images': imageUrls,
+        'tags': [],
+        'status': 'active',
+      };
+
+      setState(() => _uploadingImages = false);
+      final res = await _productService.createProduct(product);
+
+      if (!mounted) return;
+      setState(() => _submitting = false);
+
+      if (res['success'] == true) {
+        Navigator.of(context).pop(true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message']?.toString() ?? 'Failed')),
+        );
+      }
+    } catch (e) {
+      setState(() => _submitting = false);
+      setState(() => _uploadingImages = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+}
+
+class _EditProductScreen extends StatefulWidget {
+  final String sellerId;
+  final String productId;
+  final Map<String, dynamic> product;
+  const _EditProductScreen({
+    required this.sellerId,
+    required this.productId,
+    required this.product,
+  });
+
+  @override
+  State<_EditProductScreen> createState() => _EditProductScreenState();
+}
+
+class _EditProductScreenState extends State<_EditProductScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _mrpController = TextEditingController();
+  final _sellingController = TextEditingController();
+  final _quantityController = TextEditingController();
+  String? _selectedCategoryId;
+  String? _selectedStatus;
+  bool _submitting = false;
+  List<dynamic> _categories = [];
+  List<XFile> _selectedImages = [];
+  List<String> _existingImages = [];
+  bool _uploadingImages = false;
+
+  final ProductService _productService = ProductService();
+  final CategoryService _categoryService = CategoryService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+    _initializeForm();
+  }
+
+  void _initializeForm() {
+    final product = widget.product;
+    _nameController.text = product['name']?.toString() ?? '';
+    _descriptionController.text = product['description']?.toString() ?? '';
+
+    // Handle category - it might be an object or just an ID string
+    final category = product['category'];
+    if (category is Map && category['_id'] != null) {
+      _selectedCategoryId = category['_id'].toString();
+    } else if (category is String) {
+      _selectedCategoryId = category;
+    } else {
+      _selectedCategoryId = null; // Reset if category format is unexpected
+    }
+
+    // For now, set to null to avoid dropdown assertion error
+    // User will need to reselect the category
+    _selectedCategoryId = null;
+
+    _selectedStatus = product['status']?.toString() ?? 'active';
+
+    // Handle price data
+    final price = product['price'];
+    if (price is Map) {
+      _mrpController.text = price['mrp']?.toString() ?? '';
+      _sellingController.text = price['selling']?.toString() ?? '';
+    }
+
+    // Handle inventory data
+    final inventory = product['inventory'];
+    if (inventory is Map) {
+      _quantityController.text = inventory['quantity']?.toString() ?? '';
+    }
+
+    // Handle existing images
+    final images = product['images'];
+    if (images is List) {
+      _existingImages = images.map((img) => img.toString()).toList();
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    final res = await _categoryService.getCategories();
+    if (!mounted) return;
+    setState(() {
+      if (res['success'] == true) _categories = res['categories'] ?? [];
+    });
+  }
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> images = await ImageService.pickImages(maxImages: 5);
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages = images;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error picking images: $e')));
+      }
+    }
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final List<XFile> images = await ImageService.pickImages(
+        source: ImageSource.camera,
+        maxImages: 1,
+      );
+      if (images.isNotEmpty) {
+        setState(() {
+          _selectedImages.addAll(images);
+          if (_selectedImages.length > 5) {
+            _selectedImages = _selectedImages.take(5).toList();
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error taking photo: $e')));
+      }
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
+    });
+  }
+
+  void _removeExistingImage(int index) {
+    setState(() {
+      _existingImages.removeAt(index);
+    });
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _mrpController.dispose();
+    _sellingController.dispose();
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Edit Product')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Product Name'),
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(labelText: 'Description'),
+                minLines: 2,
+                maxLines: 4,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _selectedCategoryId,
+                items: _categories
+                    .map<DropdownMenuItem<String>>(
+                      (c) => DropdownMenuItem(
+                        value: c['_id'].toString(),
+                        child: Text(c['name']?.toString() ?? 'Category'),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedCategoryId = v),
+                decoration: const InputDecoration(labelText: 'Category'),
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Select category' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _mrpController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'MRP'),
+                validator: (v) {
+                  final n = num.tryParse(v?.trim() ?? '');
+                  if (n == null) return 'Enter a valid number';
+                  if (n <= 0) return 'MRP must be greater than 0';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _sellingController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Selling Price'),
+                validator: (v) {
+                  final selling = num.tryParse(v?.trim() ?? '');
+                  final mrp = num.tryParse(_mrpController.text.trim());
+                  if (selling == null) return 'Enter a valid number';
+                  if (selling <= 0)
+                    return 'Selling price must be greater than 0';
+                  if (mrp != null && selling > mrp) {
+                    return 'Selling price cannot exceed MRP';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _quantityController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Quantity'),
+                validator: (v) {
+                  final n = int.tryParse(v?.trim() ?? '');
+                  if (n == null) return 'Enter a valid integer';
+                  if (n < 0) return 'Quantity cannot be negative';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _selectedStatus,
+                items: const [
+                  DropdownMenuItem(value: 'active', child: Text('Active')),
+                  DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
+                  DropdownMenuItem(value: 'draft', child: Text('Draft')),
+                ],
+                onChanged: (v) => setState(() => _selectedStatus = v),
+                decoration: const InputDecoration(labelText: 'Status'),
+              ),
+              const SizedBox(height: 12),
+              // Image Selection Section
+              Text(
+                'Product Images',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              // Image picker buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _pickImages,
+                      icon: const Icon(Icons.photo_library),
+                      label: const Text('Gallery'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade100,
+                        foregroundColor: Colors.blue.shade800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _pickImageFromCamera,
+                      icon: const Icon(Icons.camera_alt),
+                      label: const Text('Camera'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade100,
+                        foregroundColor: Colors.green.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // Existing images preview
+              if (_existingImages.isNotEmpty) ...[
+                Text(
+                  'Current Images',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _existingImages.length,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                _existingImages[index],
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: 100,
+                                    height: 100,
+                                    color: Colors.grey[300],
+                                    child: const Icon(
+                                      Icons.image_not_supported,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: () => _removeExistingImage(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              // Selected images preview
+              if (_selectedImages.isNotEmpty) ...[
+                Text(
+                  'New Images (${_selectedImages.length}/5)',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _selectedImages.length,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ImageService.getImagePreview(
+                              _selectedImages[index],
+                              width: 100,
+                              height: 100,
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: () => _removeImage(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ] else if (_existingImages.isEmpty) ...[
+                Container(
+                  height: 100,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.image, size: 40, color: Colors.grey),
+                        SizedBox(height: 8),
+                        Text('No images selected'),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              // Validation for images
+              if (_existingImages.isEmpty && _selectedImages.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Please select at least one image',
+                    style: TextStyle(color: Colors.red.shade600, fontSize: 12),
+                  ),
+                ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: (_submitting || _uploadingImages) ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black87,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: _uploadingImages
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text('Uploading Images...'),
+                          ],
+                        )
+                      : Text(
+                          _submitting
+                              ? 'Updating Product...'
+                              : 'Update Product',
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    // Validate images
+    if (_existingImages.isEmpty && _selectedImages.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one image')),
+      );
+      return;
+    }
+
+    setState(() => _submitting = true);
+
+    try {
+      List<String> allImages = List.from(_existingImages);
+
+      // Upload new images if any
+      if (_selectedImages.isNotEmpty) {
+        setState(() => _uploadingImages = true);
+        final List<String> newImageUrls = await ImageService.uploadImages(
+          _selectedImages,
+        );
+        allImages.addAll(newImageUrls);
+        setState(() => _uploadingImages = false);
+      }
+
+      // Update product with all image URLs
+      final product = {
+        'name': _nameController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'category': _selectedCategoryId,
+        'price': {
+          'mrp': num.parse(_mrpController.text.trim()),
+          'selling': num.parse(_sellingController.text.trim()),
+          'currency': 'INR',
+        },
+        'inventory': {
+          'quantity': int.parse(_quantityController.text.trim()),
+          'unit': 'piece',
+        },
+        'images': allImages,
+        'tags': [],
+        'status': _selectedStatus ?? 'active',
+      };
+
+      final res = await _productService.updateProduct(
+        widget.productId,
+        product,
+      );
+
+      if (!mounted) return;
+      setState(() => _submitting = false);
+
+      if (res['success'] == true) {
+        Navigator.of(context).pop(true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message']?.toString() ?? 'Failed')),
+        );
+      }
+    } catch (e) {
+      setState(() => _submitting = false);
+      setState(() => _uploadingImages = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 }

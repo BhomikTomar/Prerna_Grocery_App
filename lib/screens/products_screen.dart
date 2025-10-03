@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/product_service.dart';
+import '../widgets/product_image_carousel.dart';
 import 'product_detail_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -223,7 +224,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
         : null;
 
     final images = product['images'] as List<dynamic>? ?? [];
-    final firstImage = images.isNotEmpty ? images[0] : null;
     final inventory = product['inventory']?['quantity'] ?? 0;
     final isInStock = inventory > 0;
 
@@ -248,74 +248,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
             flex: 3,
             child: Stack(
               children: [
-                Container(
+                ProductImageCarousel(
+                  images: images,
+                  height: double.infinity,
                   width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12),
-                    ),
-                    color: Colors.grey[100],
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
                   ),
-                  child: firstImage != null
-                      ? ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(12),
-                          ),
-                          child: Image.network(
-                            firstImage,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.grey[200],
-                                child: const Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.shopping_bag_outlined,
-                                        size: 48,
-                                        color: Color(0xFF2E7D32),
-                                      ),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        'Product Image',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF2E7D32),
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        )
-                      : Container(
-                          color: Colors.grey[200],
-                          child: const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.shopping_bag_outlined,
-                                  size: 48,
-                                  color: Color(0xFF2E7D32),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Product Image',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF2E7D32),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                  fit: BoxFit.cover,
+                  showDots: images.length > 1,
+                  showImageCount: images.length > 1,
                 ),
                 if (discountPct != null)
                   Positioned(

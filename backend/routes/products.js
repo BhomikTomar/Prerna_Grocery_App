@@ -222,4 +222,95 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
+// @route   PUT /api/products/:id
+// @desc    Update a product (seller only)
+// @access  Private
+router.put('/:id', protect, async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !['seller', 'vendor', 'admin'].includes(user.userType)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const productId = req.params.id;
+    const {
+      name,
+      description,
+      category,
+      price = {},
+      inventory = {},
+      images,
+      tags,
+      status
+    } = req.body;
+
+    // Find the product and check if user owns it
+    const existingProduct = await Product.findById(productId);
+    if (!existingProduct) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Check if user owns this product
+    if (existingProduct.sellerId.toString() !== user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this product' });
+    }
+
+    // Accept both app and website payloads
+    const amountFromApp = typeof price.amount === 'number' ? price.amount : undefined;
+    const mrpFromWeb = typeof price.mrp === 'number' ? price.mrp : undefined;
+    const sellingFromWeb = typeof price.selling === 'number' ? price.selling : undefined;
+    const amountForApp = amountFromApp ?? sellingFromWeb ?? mrpFromWeb;
+    const currencyForApp = price.currency || 'INR';
+
+    // Build update object
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (description) updateData.description = description;
+    if (category) updateData.category = category;
+    if (status) updateData.status = status;
+    if (tags) updateData.tags = tags;
+    if (images && images.length > 0) updateData.images = images;
+
+    // Update price if provided
+    if (price && Object.keys(price).length > 0) {
+      updateData.price = {
+        mrp: mrpFromWeb ?? amountForApp ?? existingProduct.price.mrp,
+        selling: sellingFromWeb ?? amountForApp ?? existingProduct.price.selling
+      };
+    }
+
+    // Update inventory if provided
+    if (inventory && Object.keys(inventory).length > 0) {
+      updateData.inventory = {
+        quantity: inventory.quantity ?? existingProduct.inventory.quantity,
+        unit: inventory.unit || existingProduct.inventory.unit || 'piece'
+      };
+    }
+
+    const updatedProduct = await Product.findByIdAndUpdate(
+      productId,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('category', 'name slug')
+     .populate('sellerId', 'name email');
+
+    // For app clients expecting amount/currency/lowStockThreshold, enrich response on the fly
+    const responseData = updatedProduct.toObject();
+    responseData.price = {
+      ...responseData.price,
+      amount: amountForApp ?? responseData.price.selling,
+      currency: currencyForApp
+    };
+    responseData.inventory = {
+      ...responseData.inventory,
+      lowStockThreshold: inventory.lowStockThreshold ?? 10
+    };
+
+    res.json({ success: true, data: responseData });
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({ success: false, message: 'Server error while updating product' });
+  }
+});
+
 module.exports = router;

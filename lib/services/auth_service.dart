@@ -66,11 +66,13 @@ class AuthService {
 
   // Ensure we have a current user (local or fetched)
   Future<Map<String, dynamic>?> getOrFetchCurrentUser() async {
-    final local = await getCurrentUser();
-    if (local != null && (local['userType'] != null || local['role'] != null)) {
-      return local;
+    // Always fetch fresh data from backend to get latest verification status
+    final fresh = await fetchAndCacheCurrentUser();
+    if (fresh != null) {
+      return fresh;
     }
-    return await fetchAndCacheCurrentUser();
+    // Fallback to local data if backend is unavailable
+    return await getCurrentUser();
   }
 
   // Check if user is logged in

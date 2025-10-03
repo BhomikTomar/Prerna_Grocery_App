@@ -11,6 +11,9 @@ const productRoutes = require('./routes/products');
 const cartRoutes = require('./routes/cart');
 const orderRoutes = require('./routes/orders');
 const reviewRoutes = require('./routes/reviews');
+const uploadRoutes = require('./routes/upload');
+const emailVerificationRoutes = require('./routes/emailVerification');
+const phoneVerificationRoutes = require('./routes/phoneVerification');
 
 // Connect to database
 connectDB();
@@ -55,6 +58,9 @@ app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/email', emailVerificationRoutes);
+app.use('/api/phone', phoneVerificationRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
