@@ -26,9 +26,15 @@ const validateRegistration = [
   
   body('name')
     .optional()
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Name must be between 2 and 50 characters'),
+    .custom((value) => {
+      if (value !== undefined && value !== null && value.trim() !== '') {
+        const trimmedValue = value.trim();
+        if (trimmedValue.length < 2 || trimmedValue.length > 50) {
+          throw new Error('Name must be between 2 and 50 characters');
+        }
+      }
+      return true;
+    }),
   
   body('phone')
     .optional()
@@ -69,9 +75,15 @@ const validateLogin = [
 const validateProfileUpdate = [
   body('name')
     .optional()
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Name must be between 2 and 50 characters'),
+    .custom((value) => {
+      if (value !== undefined && value !== null && value.trim() !== '') {
+        const trimmedValue = value.trim();
+        if (trimmedValue.length < 2 || trimmedValue.length > 50) {
+          throw new Error('Name must be between 2 and 50 characters');
+        }
+      }
+      return true;
+    }),
   
   body('phone')
     .optional()

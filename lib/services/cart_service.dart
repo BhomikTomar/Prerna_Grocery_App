@@ -20,6 +20,19 @@ class CartService {
     };
   }
 
+  Future<Map<String, dynamic>> _handleAuthError(http.Response response) async {
+    if (response.statusCode == 401) {
+      // Token expired - logout user
+      await AuthService().logout();
+      return {
+        'success': false,
+        'message': 'Session expired. Please log in again.',
+        'logout': true,
+      };
+    }
+    return {'success': false, 'message': 'Authentication failed'};
+  }
+
   Future<Map<String, dynamic>> getCart() async {
     final auth = await _authedHeaders();
     if (auth['ok'] != true)
@@ -31,6 +44,12 @@ class CartService {
       );
       final data = jsonDecode(res.body);
       if (res.statusCode == 200) return {'success': true, 'cart': data['data']};
+
+      // Handle authentication errors
+      if (res.statusCode == 401) {
+        return await _handleAuthError(res);
+      }
+
       return {
         'success': false,
         'message': data['message'] ?? 'Failed to fetch cart',

@@ -17,6 +17,19 @@ class OrderService {
     };
   }
 
+  Future<Map<String, dynamic>> _handleAuthError(http.Response response) async {
+    if (response.statusCode == 401) {
+      // Token expired - logout user
+      await AuthService().logout();
+      return {
+        'success': false,
+        'message': 'Session expired. Please log in again.',
+        'logout': true,
+      };
+    }
+    return {'success': false, 'message': 'Authentication failed'};
+  }
+
   // Place order from cart
   Future<Map<String, dynamic>> placeOrder({
     required Map<String, dynamic> deliveryAddress,
@@ -83,6 +96,11 @@ class OrderService {
           'pagination': responseData['pagination'],
         };
       } else {
+        // Handle authentication errors
+        if (response.statusCode == 401) {
+          return await _handleAuthError(response);
+        }
+
         return {
           'success': false,
           'message': responseData['message'] ?? 'Failed to fetch orders',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/cart_service.dart';
 import '../services/order_service.dart';
 import '../services/auth_service.dart';
@@ -367,10 +368,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                       labelText: 'City',
                                       border: OutlineInputBorder(),
                                     ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[a-zA-Z\s]'),
+                                      ),
+                                    ],
                                     validator: (value) {
                                       if (value == null ||
                                           value.trim().isEmpty) {
                                         return 'Please enter city';
+                                      }
+                                      if (!RegExp(
+                                        r'^[a-zA-Z\s]+$',
+                                      ).hasMatch(value.trim())) {
+                                        return 'City should contain only letters';
+                                      }
+                                      if (value.trim().length < 2) {
+                                        return 'City must be at least 2 characters';
                                       }
                                       return null;
                                     },
@@ -384,10 +398,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                       labelText: 'State',
                                       border: OutlineInputBorder(),
                                     ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[a-zA-Z\s]'),
+                                      ),
+                                    ],
                                     validator: (value) {
                                       if (value == null ||
                                           value.trim().isEmpty) {
                                         return 'Please enter state';
+                                      }
+                                      if (!RegExp(
+                                        r'^[a-zA-Z\s]+$',
+                                      ).hasMatch(value.trim())) {
+                                        return 'State should contain only letters';
+                                      }
+                                      if (value.trim().length < 2) {
+                                        return 'State must be at least 2 characters';
                                       }
                                       return null;
                                     },
@@ -404,12 +431,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 prefixIcon: Icon(Icons.pin_drop),
                               ),
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(6),
+                              ],
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
                                   return 'Please enter pincode';
                                 }
+                                if (!RegExp(
+                                  r'^[0-9]+$',
+                                ).hasMatch(value.trim())) {
+                                  return 'Pincode should contain only numbers';
+                                }
                                 if (value.trim().length != 6) {
-                                  return 'Pincode must be 6 digits';
+                                  return 'Pincode must be exactly 6 digits';
                                 }
                                 return null;
                               },

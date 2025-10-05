@@ -104,6 +104,14 @@ class _HomeScreenState extends State<HomeScreen> {
           count += q;
         }
         setState(() => _serverCartCount = count);
+      } else if (res['logout'] == true) {
+        // Token expired - redirect to login
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+          );
+        }
       }
     } catch (_) {}
   }
@@ -179,9 +187,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = AuthService();
     Map<String, dynamic>? user = await auth.getOrFetchCurrentUser();
     if (!mounted) return;
+
+    if (user == null) {
+      // User not authenticated - redirect to login
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+      return;
+    }
+
     setState(() {
       _currentUser = user;
-      final type = (user?['userType'] ?? user?['role'] ?? '')
+      final type = (user['userType'] ?? user['role'] ?? '')
           .toString()
           .toLowerCase();
       _isSeller = type == 'seller' || type == 'vendor';
@@ -723,6 +741,12 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       // Refresh count on return to reflect any changes made in cart
       await _refreshCartCount();
+    } else if (res['logout'] == true) {
+      // Token expired - redirect to login
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
     } else {
       final msg = res['message']?.toString() ?? 'Failed to load cart';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));

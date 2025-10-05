@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const connectDB = require('./config/database');
 const authRoutes = require('./routes/auth');
+const otpAuthRoutes = require('./routes/otpAuth');
 const categoryRoutes = require('./routes/categories');
 const productRoutes = require('./routes/products');
 const cartRoutes = require('./routes/cart');
@@ -53,6 +54,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/users', authRoutes);
+app.use('/api/auth', otpAuthRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/cart', cartRoutes);

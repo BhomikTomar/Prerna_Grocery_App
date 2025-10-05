@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 
 class ManageAddressesScreen extends StatefulWidget {
@@ -516,9 +517,18 @@ class _AddAddressDialogState extends State<AddAddressDialog> {
                   labelText: 'City',
                   border: OutlineInputBorder(),
                 ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                ],
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'City is required';
+                  }
+                  if (!RegExp(r'^[a-zA-Z\s]+$').hasMatch(value.trim())) {
+                    return 'City should contain only letters';
+                  }
+                  if (value.trim().length < 2) {
+                    return 'City must be at least 2 characters';
                   }
                   return null;
                 },
@@ -532,9 +542,18 @@ class _AddAddressDialogState extends State<AddAddressDialog> {
                   labelText: 'State',
                   border: OutlineInputBorder(),
                 ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
+                ],
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'State is required';
+                  }
+                  if (!RegExp(r'^[a-zA-Z\s]+$').hasMatch(value.trim())) {
+                    return 'State should contain only letters';
+                  }
+                  if (value.trim().length < 2) {
+                    return 'State must be at least 2 characters';
                   }
                   return null;
                 },
@@ -549,12 +568,19 @@ class _AddAddressDialogState extends State<AddAddressDialog> {
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Pincode is required';
                   }
-                  if (value.length < 6) {
-                    return 'Pincode must be at least 6 digits';
+                  if (!RegExp(r'^[0-9]+$').hasMatch(value.trim())) {
+                    return 'Pincode should contain only numbers';
+                  }
+                  if (value.trim().length != 6) {
+                    return 'Pincode must be exactly 6 digits';
                   }
                   return null;
                 },

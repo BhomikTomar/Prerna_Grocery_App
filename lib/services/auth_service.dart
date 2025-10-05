@@ -59,6 +59,10 @@ class AuthService {
           await saveUser(user);
           return Map<String, dynamic>.from(user);
         }
+      } else if (response.statusCode == 401) {
+        // Token expired or invalid - clear stored data
+        await logout();
+        return null;
       }
     } catch (_) {}
     return null;
@@ -112,7 +116,7 @@ class AuthService {
         body: jsonEncode({
           'email': email,
           'password': password, // Send plain password, backend will hash it
-          'name': name,
+          if (name != null && name.isNotEmpty) 'name': name,
           'userType': userType,
           if (phone != null && phone.isNotEmpty) 'phone': phone,
         }),
@@ -246,6 +250,65 @@ class AuthService {
         return {
           'success': false,
           'message': error['message'] ?? 'Profile update failed',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  // Send OTP for login
+  Future<Map<String, dynamic>> sendOtpForLogin({required String email}) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/send-otp-login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        return {'success': true, 'message': responseData['message']};
+      } else {
+        final error = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': error['message'] ?? 'Failed to send OTP',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  // Verify OTP for login
+  Future<Map<String, dynamic>> verifyOtpForLogin({
+    required String email,
+    required String otp,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/auth/verify-otp-login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'otp': otp}),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+
+        await _storeTokenFromResponse(responseData);
+        await saveUser(responseData['user']);
+
+        return {
+          'success': true,
+          'message': responseData['message'],
+          'user': responseData['user'],
+        };
+      } else {
+        final error = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': error['message'] ?? 'OTP verification failed',
         };
       }
     } catch (e) {
