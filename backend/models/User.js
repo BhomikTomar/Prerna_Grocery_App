@@ -106,12 +106,7 @@ const userSchema = new mongoose.Schema({
       default: false
     }
   }],
-  // Optional fields that can be added later
-  name: {
-    type: String,
-    trim: true,
-    maxlength: [50, 'Name cannot be more than 50 characters']
-  },
+  // Phone number (moved from profile to top level for easier access)
   phone: {
     type: String,
     trim: true,
@@ -120,10 +115,6 @@ const userSchema = new mongoose.Schema({
   googleId: {
     type: String,
     sparse: true // Allows multiple null values
-  },
-  avatar: {
-    type: String,
-    default: ''
   }
 }, {
   timestamps: true

@@ -35,6 +35,45 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     });
   }
 
+  String _getFullName(Map<String, dynamic> user) {
+    final firstName = user['profile']?['firstName']?.toString() ?? '';
+    final lastName = user['profile']?['lastName']?.toString() ?? '';
+
+    if (firstName.isNotEmpty && lastName.isNotEmpty) {
+      return '$firstName $lastName';
+    } else if (firstName.isNotEmpty) {
+      return firstName;
+    } else if (lastName.isNotEmpty) {
+      return lastName;
+    } else {
+      return user['email']?.toString() ?? 'User';
+    }
+  }
+
+  String _getInitial(Map<String, dynamic> user) {
+    final firstName = user['profile']?['firstName']?.toString() ?? '';
+    final lastName = user['profile']?['lastName']?.toString() ?? '';
+    final email = user['email']?.toString() ?? '';
+
+    // Try to get initial from firstName first
+    if (firstName.isNotEmpty) {
+      return firstName.substring(0, 1).toUpperCase();
+    }
+
+    // Try to get initial from lastName
+    if (lastName.isNotEmpty) {
+      return lastName.substring(0, 1).toUpperCase();
+    }
+
+    // Fallback to email initial
+    if (email.isNotEmpty) {
+      return email.substring(0, 1).toUpperCase();
+    }
+
+    // Final fallback
+    return 'U';
+  }
+
   Future<void> _logout() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -95,15 +134,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     radius: 40,
                     backgroundColor: Colors.green,
                     child: Text(
-                      _currentUser!['profile']?['firstName']
-                              ?.toString()
-                              .substring(0, 1)
-                              .toUpperCase() ??
-                          _currentUser!['email']
-                              ?.toString()
-                              .substring(0, 1)
-                              .toUpperCase() ??
-                          'U',
+                      _getInitial(_currentUser!),
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -113,9 +144,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    _currentUser!['profile']?['firstName']?.toString() ??
-                        _currentUser!['email']?.toString() ??
-                        'User',
+                    _getFullName(_currentUser!),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

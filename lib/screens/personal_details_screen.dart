@@ -30,7 +30,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
 
   Future<void> _loadUserData() async {
     final user = await AuthService().getOrFetchCurrentUser();
-    if (user != null) {
+    if (user != null && mounted) {
       setState(() {
         _firstNameController.text =
             user['profile']?['firstName']?.toString() ?? '';
@@ -110,7 +110,9 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
 
     try {
       final updates = {
@@ -147,7 +149,9 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
         ),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

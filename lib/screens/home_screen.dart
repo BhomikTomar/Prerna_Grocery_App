@@ -764,6 +764,23 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _getFullName(Map<String, dynamic>? user) {
+    if (user == null) return 'User';
+
+    final firstName = user['profile']?['firstName']?.toString() ?? '';
+    final lastName = user['profile']?['lastName']?.toString() ?? '';
+
+    if (firstName.isNotEmpty && lastName.isNotEmpty) {
+      return '$firstName $lastName';
+    } else if (firstName.isNotEmpty) {
+      return firstName;
+    } else if (lastName.isNotEmpty) {
+      return lastName;
+    } else {
+      return user['email']?.toString() ?? 'User';
+    }
+  }
+
   void _showUserMenu() async {
     final user = await AuthService().getCurrentUser();
     showModalBottomSheet(
@@ -775,7 +792,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.person),
-              title: Text(user?['name'] ?? user?['displayName'] ?? 'User'),
+              title: Text(_getFullName(user)),
               subtitle: Text(user?['email'] ?? ''),
             ),
             const Divider(),

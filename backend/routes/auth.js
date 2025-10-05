@@ -27,8 +27,11 @@ router.post('/register', validateRegistration, async (req, res) => {
       password,
       userType: userType || 'consumer',
       isEmailVerified: false,
-      name: name || '',
-      phone: phone || ''
+      phone: phone || '',
+      profile: {
+        firstName: name ? name.split(' ')[0] : '',
+        lastName: name && name.split(' ').length > 1 ? name.split(' ').slice(1).join(' ') : ''
+      }
     });
 
     // Generate token
@@ -46,7 +49,6 @@ router.post('/register', validateRegistration, async (req, res) => {
         isProfileComplete: user.isProfileComplete,
         profile: user.profile,
         addresses: user.addresses,
-        name: user.name,
         phone: user.phone,
         createdAt: user.createdAt
       },
@@ -107,7 +109,6 @@ router.post('/login', validateLogin, async (req, res) => {
         isProfileComplete: user.isProfileComplete,
         profile: user.profile,
         addresses: user.addresses,
-        name: user.name,
         phone: user.phone,
         createdAt: user.createdAt
       },
@@ -187,7 +188,6 @@ router.post('/google-signin', async (req, res) => {
       message: 'Google sign in successful',
       user: {
         id: user._id,
-        name: user.name,
         email: user.email,
         avatar: user.avatar
       },
@@ -226,10 +226,9 @@ router.get('/me', protect, async (req, res) => {
 // @access  Private
 router.put('/profile', protect, async (req, res) => {
   try {
-    const { name, phone, profile, addresses } = req.body;
+    const { phone, profile, addresses } = req.body;
     const updateData = {};
 
-    if (name) updateData.name = name;
     if (phone) updateData.phone = phone;
     if (profile) updateData.profile = profile;
     if (addresses) updateData.addresses = addresses;
@@ -252,7 +251,6 @@ router.put('/profile', protect, async (req, res) => {
         isProfileComplete: user.isProfileComplete,
         profile: user.profile,
         addresses: user.addresses,
-        name: user.name,
         phone: user.phone,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
